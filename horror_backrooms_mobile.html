@@ -1,353 +1,135 @@
-
-<!doctype html>
+<!DOCTYPE html>
 <html lang="fr">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover"/>
-<title>Backrooms Mobile - Prototype</title>
-<style>
-  html,body { height:100%; margin:0; background:black; -webkit-touch-callout:none; -webkit-user-select:none; user-select:none; }
-  #container { width:100%; height:100%; overflow:hidden; position:relative; }
-  canvas { display:block }
-  /* UI overlays */
-  .ui {
-    position:absolute; z-index:20; pointer-events:none; width:100%; height:100%;
-  }
-  #leftJoy, #rightJoy { position:absolute; bottom:22%; width:40%; height:40%; pointer-events:auto; }
-  #leftJoy { left:2%; touch-action:none; }
-  #rightJoy { right:2%; touch-action:none; }
-  .hint { position:absolute; top:6px; left:6px; color:#9b9b9b; font-family:Arial,Helvetica,sans-serif; font-size:13px; z-index:25; }
-  #pauseBtn { position:absolute; top:8px; right:8px; z-index:25; pointer-events:auto; background:rgba(255,255,255,0.06); color:#eee; border:1px solid rgba(255,255,255,0.06); padding:6px 10px; border-radius:6px; font-family:Arial; }
-  #flash { position:absolute; inset:0; background:black; z-index:30; pointer-events:none; opacity:0; }
-  #help{ position:absolute; bottom:6px; left:50%; transform:translateX(-50%); color:#ddd; font-family:Arial; font-size:13px; z-index:25; background:rgba(0,0,0,0.3); padding:6px 10px; border-radius:6px;}
-</style>
+  <meta charset="UTF-8">
+  <title>Horror Night</title>
+  <style>
+    body { margin: 0; overflow: hidden; background: black; }
+    canvas { display: block; }
+    #joystickLeft, #joystickRight {
+      position: absolute;
+      bottom: 10%;
+      width: 40%;
+      height: 40%;
+      touch-action: none;
+    }
+    #joystickLeft { left: 5%; }
+    #joystickRight { right: 5%; }
+  </style>
 </head>
 <body>
-<div id="container"></div>
-<div class="ui">
-  <div id="leftJoy"></div>
-  <div id="rightJoy"></div>
-  <div class="hint">Appuie sur l'écran pour activer la manette, utilise la joystick droit pour tourner.</div>
-  <button id="pauseBtn">Pause</button>
-  <div id="help">Lampe torche: éclair limité | Collisions simples | Mobile only</div>
-</div>
-<div id="flash"></div>
+  <div id="joystickLeft"></div>
+  <div id="joystickRight"></div>
 
-<!-- Three.js as modules -->
-<script type="module">
-import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.164.0/build/three.module.js';
-import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.164.0/examples/jsm/loaders/GLTFLoader.js';
-import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.164.0/examples/jsm/controls/OrbitControls.js';
+  <!-- Three.js + OrbitControls + GLTFLoader -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/examples/js/loaders/GLTFLoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/nipplejs@0.9.0/dist/nipplejs.min.js"></script>
 
-// NippleJS for mobile joysticks (non-module)
-</script>
-<script src="https://cdn.jsdelivr.net/npm/nipplejs@0.9.0/dist/nipplejs.min.js"></script>
+  <script>
+    let scene, camera, renderer, clock;
+    let player = new THREE.Object3D();
+    let monster, house;
+    let moveForward=0, moveRight=0, rotateX=0;
 
-<script type="module">
-import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.164.0/build/three.module.js';
-import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.164.0/examples/jsm/loaders/GLTFLoader.js';
+    init();
+    animate();
 
-const container = document.getElementById('container');
+    function init() {
+      scene = new THREE.Scene();
+      clock = new THREE.Clock();
 
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x000000);
-scene.fog = new THREE.FogExp2(0x000000, 0.02);
+      // Camera
+      camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+      player.add(camera);
+      camera.position.set(0, 1.7, 0); // hauteur yeux
+      scene.add(player);
 
-// renderer
-const renderer = new THREE.WebGLRenderer({ antialias:true, preserveDrawingBuffer:false });
-renderer.setPixelRatio(window.devicePixelRatio || 1);
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.shadowMap.enabled = true;
-container.appendChild(renderer.domElement);
+      // Renderer
+      renderer = new THREE.WebGLRenderer({antialias:true});
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      document.body.appendChild(renderer.domElement);
 
-// camera (player)
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 500);
-camera.position.set(0,1.6,0);
+      // Lumière torche
+      const spot = new THREE.SpotLight(0xffffff, 5, 15, Math.PI/8, 0.5, 1);
+      spot.position.set(0, 1.7, 0);
+      player.add(spot);
+      player.add(spot.target);
+      spot.target.position.set(0,1.7,-1);
 
-// minimal ambient so torch is meaningful
-scene.add(new THREE.AmbientLight(0x000000, 0.05));
+      // Charger la maison
+      const loader = new THREE.GLTFLoader();
+      loader.load("modular_kit_horror_house_104_pieces.glb", (gltf)=>{
+        house = gltf.scene;
+        scene.add(house);
+      });
 
-// torch spotlight attached to camera
-const torch = new THREE.SpotLight(0xfff7d6, 3, 12, Math.PI/8, 0.6, 2);
-torch.castShadow = true;
-torch.shadow.mapSize.width = 1024;
-torch.shadow.mapSize.height = 1024;
-scene.add(torch);
-scene.add(torch.target);
+      // Charger le monstre
+      loader.load("tinka_monster.glb", (gltf)=>{
+        monster = gltf.scene;
+        monster.scale.set(0.5,0.5,0.5);
+        monster.position.set(2,0,-5);
+        scene.add(monster);
+      });
 
-// subtle flicker values
-let torchBaseIntensity = 3;
+      // Joysticks
+      const joystickLeft = nipplejs.create({
+        zone: document.getElementById('joystickLeft'),
+        mode: 'static',
+        position: { left: '50%', top: '50%' },
+        color: 'white'
+      });
 
-// floor helper (invisible) if needed
-const floorGeo = new THREE.PlaneGeometry(500,500);
-const floorMat = new THREE.MeshStandardMaterial({color:0x09090a});
-const floor = new THREE.Mesh(floorGeo, floorMat);
-floor.rotation.x = -Math.PI/2;
-floor.position.y = 0;
-floor.receiveShadow = true;
-scene.add(floor);
+      joystickLeft.on('move', (evt, data)=>{
+        moveForward = Math.cos(data.angle.radian) * data.distance/50;
+        moveRight   = Math.sin(data.angle.radian) * data.distance/50;
+      });
+      joystickLeft.on('end', ()=>{ moveForward=0; moveRight=0; });
 
-// load models
-const loader = new GLTFLoader();
-let house = null;
-let monster = null;
+      const joystickRight = nipplejs.create({
+        zone: document.getElementById('joystickRight'),
+        mode: 'static',
+        position: { left: '50%', top: '50%' },
+        color: 'red'
+      });
 
-const MODEL_HOUSE = 'modular_kit_horror_house_104_pieces.glb';
-const MODEL_MONSTER = 'tinka_monster.glb';
+      joystickRight.on('move', (evt, data)=>{
+        rotateX = data.vector.x/50;
+      });
+      joystickRight.on('end', ()=>{ rotateX=0; });
 
-// simple collision boundaries (will be computed from house bounding boxes)
-let obstacles = []; // array of boxes {min, max}
-
-// load house
-loader.load(MODEL_HOUSE, (g) => {
-    house = g.scene;
-    house.traverse((c)=>{ if(c.isMesh){ c.castShadow = false; c.receiveShadow = true; c.material.side = THREE.DoubleSide; } });
-    house.scale.set(1,1,1);
-    scene.add(house);
-
-    // compute simple bounding boxes from large children to act as obstacles
-    house.updateMatrixWorld(true);
-    house.traverse((node)=>{
-        if(node.isMesh){
-            node.geometry.computeBoundingBox();
-            const box = node.geometry.boundingBox.clone().applyMatrix4(node.matrixWorld);
-            // add if reasonably large (to avoid tiny props)
-            const size = new THREE.Vector3();
-            box.getSize(size);
-            if(size.length() > 0.5){ obstacles.push({min: box.min.clone(), max: box.max.clone()}); }
-        }
-    });
-}, undefined, (e)=>{ console.error('Error loading house', e); });
-
-// load monster
-loader.load(MODEL_MONSTER, (g) => {
-    monster = g.scene;
-    monster.scale.set(1,1,1);
-    monster.position.set(2,0, -6);
-    monster.traverse((c)=>{ if(c.isMesh){ c.castShadow=true; }});
-    scene.add(monster);
-}, undefined, (e)=>{ console.error('Error loading monster', e); });
-
-// simple player state
-const player = {
-    pos: new THREE.Vector3(0,1.6,4),
-    velocity: new THREE.Vector3(),
-    speed: 2.4, // m/s
-    yaw: 0,
-    pitch: 0
-};
-
-// resume from localStorage if exists
-try {
-  const save = JSON.parse(localStorage.getItem('backrooms_save_v1') || 'null');
-  if(save){
-    player.pos.fromArray(save.playerPos || [0,1.6,4]);
-    player.yaw = save.yaw || 0;
-    player.pitch = save.pitch || 0;
-    if(monster) monster.position.fromArray(save.monsterPos || [2,0,-6]);
-  }
-} catch(e){ console.warn('save read failed', e); }
-
-camera.position.copy(player.pos);
-camera.rotation.order = "YXZ";
-camera.rotation.y = player.yaw;
-camera.rotation.x = player.pitch;
-
-// movement via nipplejs
-let leftManager = null, rightManager = null;
-let moveVec = {x:0,y:0};
-let lookVec = {x:0,y:0};
-
-function createJoysticks(){
-  leftManager = nipplejs.create({
-    zone: document.getElementById('leftJoy'),
-    mode: 'static',
-    position: { left: '50%', top: '50%' },
-    color: 'white',
-    size: 140
-  });
-  leftManager[0].on('move', (evt, data) => {
-    if(!data) return;
-    const dist = Math.min(data.distance/60,1);
-    moveVec.x = Math.cos(data.angle.radian) * dist;
-    moveVec.y = Math.sin(data.angle.radian) * dist * -1;
-  });
-  leftManager[0].on('end', ()=>{ moveVec.x=0; moveVec.y=0; });
-
-  rightManager = nipplejs.create({
-    zone: document.getElementById('rightJoy'),
-    mode: 'static',
-    position: { right: '50%', top: '50%' },
-    color: 'white',
-    size: 120
-  });
-  rightManager[0].on('move', (evt, data) => {
-    if(!data) return;
-    const dist = Math.min(data.distance/60,1);
-    lookVec.x = data.distance/40 * Math.cos(data.angle.radian);
-    lookVec.y = data.distance/40 * Math.sin(data.angle.radian);
-  });
-  rightManager[0].on('end', ()=>{ lookVec.x=0; lookVec.y=0; });
-}
-
-// create joysticks after short delay so zones exist
-setTimeout(createJoysticks, 300);
-
-// simple raycast collision test for proposed new position
-function collidesAt(position){
-  const padding = 0.2;
-  for(const b of obstacles){
-    if(position.x + padding < b.max.x && position.x - padding > b.min.x &&
-       position.z + padding < b.max.z && position.z - padding > b.min.z &&
-       position.y < b.max.y + 1 && position.y > b.min.y - 1){
-      // inside obstacle - collides
-      return true;
+      window.addEventListener('resize', onWindowResize);
     }
-  }
-  return false;
-}
 
-// monster AI: pursuit
-function updateMonster(dt){
-  if(!monster) return;
-  // simple line-of-sight move towards player
-  const dir = new THREE.Vector3().subVectors(player.pos, monster.position);
-  const dist = dir.length();
-  if(dist > 0.3){
-    dir.normalize();
-    const speed = 1.2 + Math.min(Math.max(dist/10,0),1.4); // speed scales a bit with distance
-    // attempt move with basic obstacle avoidance: try center, then slight offsets
-    const attempts = [dir.clone(), new THREE.Vector3(dir.x*0.9 - dir.z*0.2,0, dir.z*0.9 + dir.x*0.2), new THREE.Vector3(dir.x*0.9 + dir.z*0.2,0, dir.z*0.9 - dir.x*0.2)];
-    for(const a of attempts){
-      const next = monster.position.clone().addScaledVector(a, speed * dt);
-      if(!collidesAt(next)){
-        monster.position.copy(next);
-        break;
+    function onWindowResize(){
+      camera.aspect = window.innerWidth/window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    function animate(){
+      requestAnimationFrame(animate);
+      const delta = clock.getDelta();
+
+      // Déplacements joueur
+      const speed = 2.5;
+      player.translateZ(-moveForward*delta*speed);
+      player.translateX(moveRight*delta*speed);
+      player.rotation.y -= rotateX*delta*2;
+
+      // Monstre poursuit joueur
+      if(monster){
+        const dir = new THREE.Vector3();
+        player.getWorldPosition(dir);
+        monster.lookAt(dir);
+        const monsterPos = monster.position;
+        const toPlayer = dir.clone().sub(monsterPos).normalize();
+        monsterPos.add(toPlayer.multiplyScalar(delta*1.5)); // vitesse du monstre
       }
+
+      renderer.render(scene, camera);
     }
-    // face player
-    monster.lookAt(player.pos.x, monster.position.y, player.pos.z);
-  }
-  // if very close -> "catch" event
-  if(monster.position.distanceTo(player.pos) < 0.9){
-    onPlayerCaught();
-  }
-}
-
-let caught = false;
-function onPlayerCaught(){
-  if(caught) return;
-  caught = true;
-  document.getElementById('flash').style.transition = 'none';
-  document.getElementById('flash').style.opacity = '1';
-  setTimeout(()=>{ document.getElementById('flash').style.transition='opacity 1s'; document.getElementById('flash').style.opacity='0'; }, 50);
-  // reset positions after short delay
-  setTimeout(()=>{
-    player.pos.set(0,1.6,4);
-    camera.position.copy(player.pos);
-    if(monster) monster.position.set(2,0,-6);
-    caught = false;
-  }, 1400);
-}
-
-// basic sound effects via WebAudio (tiny hum)
-let audioCtx = null;
-function ensureAudio(){
-  if(audioCtx) return;
-  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  const osc = audioCtx.createOscillator();
-  const gain = audioCtx.createGain();
-  osc.type = 'sine';
-  osc.frequency.value = 60;
-  gain.gain.value = 0.0009;
-  osc.connect(gain);
-  gain.connect(audioCtx.destination);
-  osc.start();
-}
-
-// main loop
-let last = performance.now();
-function animate(now){
-  const dt = Math.min((now - last)/1000, 0.05);
-  last = now;
-
-  // camera rotation from lookVec
-  player.yaw -= lookVec.x * 1.5 * dt;
-  player.pitch -= lookVec.y * 1.2 * dt;
-  player.pitch = Math.max(-Math.PI/2 + 0.1, Math.min(Math.PI/2 - 0.1, player.pitch));
-  camera.rotation.y = player.yaw;
-  camera.rotation.x = player.pitch;
-
-  // movement vector in world space (local to camera yaw)
-  const forward = new THREE.Vector3(Math.sin(player.yaw),0, Math.cos(player.yaw));
-  const right = new THREE.Vector3(Math.sin(player.yaw + Math.PI/2),0, Math.cos(player.yaw + Math.PI/2));
-  const intended = new THREE.Vector3();
-  intended.addScaledVector(forward, moveVec.y * player.speed * dt);
-  intended.addScaledVector(right, moveVec.x * player.speed * dt);
-
-  const proposed = player.pos.clone().add(intended);
-  if(!collidesAt(proposed)){
-    player.pos.copy(proposed);
-    camera.position.copy(player.pos);
-  }
-
-  // torch follows camera
-  const torchPos = camera.position.clone();
-  torchPos.y -= 0.1;
-  torch.position.copy(torchPos);
-  // target a bit ahead
-  const target = camera.getWorldDirection(new THREE.Vector3()).multiplyScalar(6).add(camera.position);
-  torch.target.position.copy(target);
-
-  // torch flicker
-  torch.intensity = torchBaseIntensity + (Math.random()-0.5)*0.6;
-
-  // update monster
-  updateMonster(dt);
-
-  renderer.render(scene, camera);
-  requestAnimationFrame(animate);
-}
-requestAnimationFrame(animate);
-
-// pause button
-document.getElementById('pauseBtn').addEventListener('click', ()=>{
-  if(renderer.domElement.style.display === 'none'){
-    renderer.domElement.style.display = 'block';
-    document.getElementById('pauseBtn').textContent = 'Pause';
-    requestAnimationFrame(animate);
-  } else {
-    renderer.domElement.style.display = 'none';
-    document.getElementById('pauseBtn').textContent = 'Resume';
-  }
-});
-
-// save state periodically to localStorage
-setInterval(()=>{
-  try{
-    const save = {
-      playerPos: [player.pos.x, player.pos.y, player.pos.z],
-      yaw: player.yaw,
-      pitch: player.pitch,
-      monsterPos: monster ? [monster.position.x, monster.position.y, monster.position.z] : null,
-      timestamp: Date.now()
-    };
-    localStorage.setItem('backrooms_save_v1', JSON.stringify(save));
-  }catch(e){ console.warn('save failed', e); }
-}, 3000);
-
-// resume audio on first touch (mobile policy)
-document.body.addEventListener('touchstart', function initAudioOnce(){
-  ensureAudio();
-  document.body.removeEventListener('touchstart', initAudioOnce);
-}, {passive:true});
-
-// handle resize
-window.addEventListener('resize', ()=>{
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-});
-</script>
+  </script>
 </body>
 </html>
+
