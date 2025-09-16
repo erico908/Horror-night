@@ -2,7 +2,7 @@
 <html lang="fr">
   <head>
     <meta charset="UTF-8" />
-    <title>Backrooms avec Texture</title>
+    <title>Backrooms Texturé</title>
     <style>
       body {
         margin: 0;
@@ -43,11 +43,10 @@
     </style>
   </head>
   <body>
-    <div id="hud">Backrooms : Texture Sol + Toit</div>
+    <div id="hud">Backrooms : Textures CC0</div>
     <div id="joystick"><div id="stick"></div></div>
 
     <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/examples/js/loaders/TextureLoader.js"></script>
     <script>
       const scene = new THREE.Scene();
       scene.fog = new THREE.FogExp2(0xe6e6d8, 0.02);
@@ -59,30 +58,37 @@
       renderer.setSize(window.innerWidth, window.innerHeight);
       document.body.appendChild(renderer.domElement);
 
-      const ambient = new THREE.AmbientLight(0xffffff, 0.3);
+      const ambient = new THREE.AmbientLight(0xffffff, 0.4);
       scene.add(ambient);
-      const dirLight = new THREE.DirectionalLight(0xffffee, 0.7);
+      const dirLight = new THREE.DirectionalLight(0xffffee, 0.8);
       dirLight.position.set(10,20,10);
       scene.add(dirLight);
 
-      // textures
-      const loader = new THREE.TextureLoader();
-      // Exemple de texture — assure-toi que la licence est OK pour ton usage
-      const solTextureUrl = 'https://3dtextures.me/wp-content/uploads/2024/06/Floor_Backrooms_001_DIFF_1K.jpg'; 
-      // (fictive ou à remplacer par une vraie URL)
-      let floorMat;
-      loader.load(solTextureUrl, (tex) => {
-        tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-        tex.repeat.set( MAP_W / 2, MAP_H / 2 );
-        floorMat = new THREE.MeshStandardMaterial({ map: tex, roughness: 1 });
-        floor.material = floorMat;
-      }, undefined, (err) => {
-        console.error('Erreur chargement texture sol :', err);
-      });
-
+      // ---------------- MAP ----------------
       const MAP_W = 40, MAP_H = 40, CELL = 4;
+
+      // Texture loader
+      const loader = new THREE.TextureLoader();
+
+      const wallTex = loader.load("https://ambientcg.com/get?file=Wallpaper001_1K-JPG_Color.jpg");
+      wallTex.wrapS = wallTex.wrapT = THREE.RepeatWrapping;
+      wallTex.repeat.set(1,1);
+
+      const floorTex = loader.load("https://ambientcg.com/get?file=Carpet006_1K-JPG_Color.jpg");
+      floorTex.wrapS = floorTex.wrapT = THREE.RepeatWrapping;
+      floorTex.repeat.set(MAP_W/2, MAP_H/2);
+
+      const ceilTex = loader.load("https://ambientcg.com/get?file=CeilingTile001_1K-JPG_Color.jpg");
+      ceilTex.wrapS = ceilTex.wrapT = THREE.RepeatWrapping;
+      ceilTex.repeat.set(MAP_W/2, MAP_H/2);
+
+      // Materials
+      const wallMat = new THREE.MeshStandardMaterial({ map: wallTex });
+      const floorMat = new THREE.MeshStandardMaterial({ map: floorTex });
+      const ceilMat = new THREE.MeshStandardMaterial({ map: ceilTex });
+
+      // Walls
       const wallGeo = new THREE.BoxGeometry(CELL, 3, CELL);
-      const wallMat = new THREE.MeshStandardMaterial({ color: 0xffffcc, roughness: 1 });
       const walls = new THREE.Group();
       for (let y = 0; y < MAP_H; y++) {
         for (let x = 0; x < MAP_W; x++) {
@@ -95,22 +101,20 @@
       }
       scene.add(walls);
 
-      let floorGeo, floorMatDefault, floor;
-      // Floor par défaut (matériau neutre si texture pas encore chargée)
-      floorGeo = new THREE.PlaneGeometry(MAP_W * CELL, MAP_H * CELL);
-      floorMatDefault = new THREE.MeshStandardMaterial({ color: 0xffffcc, roughness: 1 });
-      floor = new THREE.Mesh(floorGeo, floorMatDefault);
+      // Floor
+      const floorGeo = new THREE.PlaneGeometry(MAP_W * CELL, MAP_H * CELL);
+      const floor = new THREE.Mesh(floorGeo, floorMat);
       floor.rotation.x = -Math.PI/2;
       scene.add(floor);
 
-      // Ceiling (plafond)
+      // Ceiling
       const ceilGeo = new THREE.PlaneGeometry(MAP_W * CELL, MAP_H * CELL);
-      const ceilMat = new THREE.MeshStandardMaterial({ color: 0xffffcc, roughness: 1 });
       const ceiling = new THREE.Mesh(ceilGeo, ceilMat);
       ceiling.rotation.x = Math.PI/2;
       ceiling.position.y = 3;
       scene.add(ceiling);
 
+      // ---------------- CONTROLS ----------------
       let yaw = 0, pitch = 0;
       let moveX = 0, moveZ = 0;
 
@@ -139,8 +143,8 @@
         const angle = Math.atan2(dy, dx);
         stick.style.left = 35 + dist * Math.cos(angle) - 15 + "px";
         stick.style.top = 35 + dist * Math.sin(angle) - 15 + "px";
-        moveX = (dx / 40);
-        moveZ = (dy / 40);
+        moveX = dx / 40;
+        moveZ = dy / 40;
       });
 
       let lastTouchX = null, lastTouchY = null;
@@ -161,10 +165,9 @@
           pitch = Math.max(-Math.PI/2, Math.min(Math.PI/2, pitch));
         }
       });
-      document.addEventListener("touchend", () => {
-        lastTouchX = null; lastTouchY = null;
-      });
+      document.addEventListener("touchend", () => { lastTouchX = null; lastTouchY = null; });
 
+      // ---------------- GAME LOOP ----------------
       const clock = new THREE.Clock();
       function animate() {
         requestAnimationFrame(animate);
@@ -185,13 +188,14 @@
       animate();
 
       window.addEventListener("resize", () => {
-        camera.aspect = window.innerWidth/window.innerHeight;
+        camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
         renderer.setSize(window.innerWidth, window.innerHeight);
       });
     </script>
   </body>
 </html>
+
 
 
 
