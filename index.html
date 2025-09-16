@@ -80,28 +80,15 @@
       }
     }
 
-    // ---------- LAMPE TORCHE ----------
-    const torch = new THREE.SpotLight(0xffffcc, 2, 15, Math.PI/6, 0.3);
-    torch.position.set(0,1.6,0);
-    torch.target.position.set(0,1.6,-1);
-    scene.add(torch);
-    scene.add(torch.target);
-
-    // ---------- SON ----------
-    const listener = new THREE.AudioListener();
-    camera.add(listener);
-    const sound = new THREE.Audio(listener);
-    const audioLoader = new THREE.AudioLoader();
-    audioLoader.load("https://cdn.pixabay.com/download/audio/2022/02/23/audio_4b64b0fcd2.mp3?filename=neon-light-hum-14213.mp3",
-      (buffer)=>{
-        sound.setBuffer(buffer);
-        sound.setLoop(true);
-        sound.setVolume(0.3);
-        sound.play();
-      });
-
-    // ---------- LUMIERE AMBIANTE ----------
-    scene.add(new THREE.AmbientLight(0xffffff, 0.1));
+    // ---------- LUMIÈRES (néons uniformes) ----------
+    scene.add(new THREE.AmbientLight(0xffffe0, 0.6));
+    for (let i=-40; i<=40; i+=20) {
+      for (let j=-40; j<=40; j+=20) {
+        const light = new THREE.PointLight(0xffffcc, 0.8, 30);
+        light.position.set(i, 2.9, j);
+        scene.add(light);
+      }
+    }
 
     // ---------- JOYSTICK ----------
     let yaw = 0, pitch = 0;
@@ -124,12 +111,15 @@
       if(!joyActive) return;
       const t=e.touches[0];
       const dx=t.clientX-joyCenter.x, dy=t.clientY-joyCenter.y;
-      const dist=Math.min(Math.sqrt(dx*dx+dy*dy),40);
-      const ang=Math.atan2(dy,dx);
+      const maxDist = 40;
+      const dist = Math.min(Math.sqrt(dx*dx+dy*dy), maxDist);
+      const ang = Math.atan2(dy, dx);
       stick.style.left=35+dist*Math.cos(ang)-15+"px";
       stick.style.top=35+dist*Math.sin(ang)-15+"px";
-      moveX = dx/40;
-      moveZ = dy/40;
+
+      // Normalisation (-1 à 1)
+      moveX = dx / maxDist;
+      moveZ = dy / maxDist;
     });
 
     // ---------- CAMERA SWIPE ----------
@@ -163,17 +153,16 @@
       camera.rotation.x=pitch;
       camera.rotation.y=yaw;
 
-      // lampe torche suit caméra
-      torch.position.copy(camera.position);
-      const dir=new THREE.Vector3(0,0,-1).applyEuler(camera.rotation).add(camera.position);
-      torch.target.position.copy(dir);
-
-      // déplacement
+      // sauvegarde position
       const oldPos=camera.position.clone();
+
+      // vecteurs
       const forward=new THREE.Vector3(Math.sin(yaw),0,Math.cos(yaw));
       const right=new THREE.Vector3().crossVectors(forward,new THREE.Vector3(0,1,0)).normalize();
-      camera.position.addScaledVector(forward,-moveZ*speed*5);
-      camera.position.addScaledVector(right,moveX*speed*5);
+
+      // déplacement fluide
+      camera.position.addScaledVector(forward,-moveZ*speed*3);
+      camera.position.addScaledVector(right,moveX*speed*3);
 
       // collisions
       const radius=0.5;
@@ -198,6 +187,7 @@
   </script>
 </body>
 </html>
+
 
 
 
