@@ -7,31 +7,32 @@
   <style>
     html,body { height:100%; margin:0; background:#000; overflow:hidden; touch-action:none; -webkit-user-select:none; user-select:none;}
     #joystick {
-      position:absolute; left:18px; bottom:28px;
-      width:80px; height:80px; border-radius:50%;
+      position:absolute; left:20px; bottom:30px;
+      width:120px; height:120px; border-radius:50%;
       background: rgba(255,255,255,0.06);
       border: 2px solid rgba(255,255,255,0.12);
       touch-action:none;
     }
     #stick {
-      position:absolute; width:30px; height:30px; border-radius:50%;
+      position:absolute; width:40px; height:40px; border-radius:50%;
       background: rgba(255,255,255,0.6);
-      left:25px; top:25px;
-      box-shadow:0 1px 4px rgba(0,0,0,0.6);
+      left:40px; top:40px;
+      box-shadow:0 1px 6px rgba(0,0,0,0.6);
       transition: left 0.02s linear, top 0.02s linear;
     }
     #sprintBtn {
-      position:absolute; bottom:40px; right:30px;
-      width:70px; height:70px; border-radius:50%;
-      background:rgba(255,0,0,0.3);
-      border:2px solid rgba(255,0,0,0.5);
-      touch-action:none;
+      position:absolute; right:25px; bottom:40px;
+      width:90px; height:90px; border-radius:50%;
+      background: rgba(255,255,255,0.15);
+      border: 2px solid rgba(255,255,255,0.25);
+      color:white; font-size:18px; text-align:center; line-height:90px;
+      user-select:none;
     }
   </style>
 </head>
 <body>
   <div id="joystick"><div id="stick"></div></div>
-  <div id="sprintBtn"></div>
+  <div id="sprintBtn">Sprint</div>
 
   <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
   <script>
@@ -41,18 +42,19 @@
   const PLAYER_HEIGHT = 1.6;
   const PLAYER_RADIUS = 0.5;
   const BASE_WALK_SPEED = 2.5;
-  const SPRINT_MULT = 1.8; // sprint = x1.8 plus vite
+  const SPRINT_MULT = 2.0;
   const CAMERA_SENSITIVITY = 0.0035;
   const PITCH_LIMIT = Math.PI * 0.47;
-  const JOY_MAX = 40, JOY_DEADZONE = 0.15;
+  const JOY_MAX = 60, JOY_DEADZONE = 0.15; // joystick plus grand
 
   // ---------- SCENE ----------
   const scene = new THREE.Scene();
-  scene.fog = new THREE.FogExp2(0xe6e6d8, 0.0035);
+  scene.fog = new THREE.FogExp2(0xe6e6d8, 0.004); // plus épais = optimisation
 
   const renderer = new THREE.WebGLRenderer({antialias:true});
   renderer.setPixelRatio(window.devicePixelRatio || 1);
   renderer.setSize(innerWidth, innerHeight);
+  renderer.setClearColor(0x000000,1);
   document.body.appendChild(renderer.domElement);
 
   const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 1000);
@@ -73,20 +75,19 @@
   const texCeil = loader.load("https://ambientcg.com/get?file=CeilingTile001_1K_Color.jpg");
   texCeil.wrapS = texCeil.wrapT = THREE.RepeatWrapping; texCeil.repeat.set(60,60);
 
-  // floor & ceiling
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(MAP_HALF*2, MAP_HALF*2), new THREE.MeshStandardMaterial({map:texFloor}));
   floor.rotation.x = -Math.PI/2; scene.add(floor);
   const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(MAP_HALF*2, MAP_HALF*2), new THREE.MeshStandardMaterial({map:texCeil}));
   ceiling.position.y = 3; ceiling.rotation.x = Math.PI/2; scene.add(ceiling);
 
-  // walls
+  // murs
   const walls = [];
   const wallGeo = new THREE.BoxGeometry(CELL,3,CELL);
   const wallMat = new THREE.MeshStandardMaterial({map:texWall});
   for (let x=-MAP_HALF+CELL/2; x<=MAP_HALF-CELL/2; x+=CELL){
     for (let z=-MAP_HALF+CELL/2; z<=MAP_HALF-CELL/2; z+=CELL){
       const isBorder = Math.abs(x)>MAP_HALF-CELL*1.5 || Math.abs(z)>MAP_HALF-CELL*1.5;
-      if(isBorder || Math.random()>0.9){ // densité réduite
+      if(isBorder || Math.random()>0.82){
         const w = new THREE.Mesh(wallGeo, wallMat);
         w.position.set(x,1.5,z);
         scene.add(w); walls.push(w);
@@ -94,11 +95,11 @@
     }
   }
 
-  // lights
-  scene.add(new THREE.AmbientLight(0xffffe0,0.55));
-  for(let i=-60;i<=60;i+=40){
-    for(let j=-60;j<=60;j+=40){
-      const l=new THREE.PointLight(0xffffcc,0.7,22,2);
+  // lumières optimisées
+  scene.add(new THREE.AmbientLight(0xffffe0,0.45));
+  for(let i=-60;i<=60;i+=30){
+    for(let j=-60;j<=60;j+=30){
+      const l=new THREE.PointLight(0xffffcc,0.65,22,2.5);
       l.position.set(i,2.8,j);
       scene.add(l);
     }
@@ -108,21 +109,19 @@
   const listener = new THREE.AudioListener();
   camera.add(listener);
   const footstep = new THREE.Audio(listener);
-  const loaderAudio = new THREE.AudioLoader();
-  loaderAudio.load("https://cdn.pixabay.com/download/audio/2021/08/04/audio_b64f3a542a.mp3?filename=footstep-carpet-1-6553.mp3",
+  new THREE.AudioLoader().load("https://cdn.pixabay.com/download/audio/2021/08/04/audio_b64f3a542a.mp3?filename=footstep-carpet-1-6553.mp3",
     (buf)=>{ footstep.setBuffer(buf); footstep.setLoop(true); footstep.setVolume(0.45); });
 
   // ---------- INPUT ----------
   let yaw=0, pitch=0;
   let moveX=0, moveZ=0;
-  let joyTouchId=null, joyCenter={x:0,y:0}, joyActive=false;
-  let sprint=false;
-
-  const joystick=document.getElementById("joystick");
-  const stick=document.getElementById("stick");
-  const sprintBtn=document.getElementById("sprintBtn");
+  let isSprinting=false;
 
   // joystick
+  let joyTouchId=null, joyCenter={x:0,y:0}, joyActive=false;
+  const joystick=document.getElementById("joystick");
+  const stick=document.getElementById("stick");
+
   joystick.addEventListener("touchstart",e=>{
     const t=e.changedTouches[0]; joyTouchId=t.identifier; joyActive=true;
     const r=joystick.getBoundingClientRect();
@@ -134,8 +133,8 @@
         const dx=t.clientX-joyCenter.x, dy=t.clientY-joyCenter.y;
         const dist=Math.min(Math.hypot(dx,dy),JOY_MAX);
         const ang=Math.atan2(dy,dx);
-        stick.style.left=`${25+dist*Math.cos(ang)}px`;
-        stick.style.top =`${25+dist*Math.sin(ang)}px`;
+        stick.style.left=`${60+dist*Math.cos(ang)-20}px`;
+        stick.style.top =`${60+dist*Math.sin(ang)-20}px`;
         let nx=dx/JOY_MAX, ny=dy/JOY_MAX, len=Math.hypot(nx,ny);
         if(len<JOY_DEADZONE){ moveX=0; moveZ=0; }
         else{ nx/=len; ny/=len; moveX=nx; moveZ=-ny; }
@@ -145,19 +144,15 @@
   joystick.addEventListener("touchend",e=>{
     for(const t of e.changedTouches){
       if(t.identifier===joyTouchId){ joyActive=false; joyTouchId=null; moveX=0; moveZ=0;
-        stick.style.left="25px"; stick.style.top="25px"; }
+        stick.style.left="40px"; stick.style.top="40px"; }
     }
   });
 
-  // sprint button
-  sprintBtn.addEventListener("touchstart",()=>{ sprint=true; sprintBtn.style.background="rgba(255,0,0,0.6)"; });
-  sprintBtn.addEventListener("touchend",()=>{ sprint=false; sprintBtn.style.background="rgba(255,0,0,0.3)"; });
-
-  // camera touch
+  // caméra tactile
   let camTouchId=null,lastX=0,lastY=0;
   document.addEventListener("touchstart",e=>{
     for(const t of e.changedTouches){
-      if(!t.target.closest("#joystick") && !t.target.closest("#sprintBtn") && camTouchId===null){
+      if(!t.target.closest("#joystick") && camTouchId===null && !t.target.closest("#sprintBtn")){
         camTouchId=t.identifier; lastX=t.clientX; lastY=t.clientY;
       }
     }
@@ -176,6 +171,11 @@
     for(const t of e.changedTouches){ if(t.identifier===camTouchId){camTouchId=null;} }
   });
 
+  // bouton sprint
+  const sprintBtn=document.getElementById("sprintBtn");
+  sprintBtn.addEventListener("touchstart",()=>{ isSprinting=true; });
+  sprintBtn.addEventListener("touchend",()=>{ isSprinting=false; });
+
   // ---------- LOOP ----------
   const clock=new THREE.Clock();
   function animate(){
@@ -186,35 +186,26 @@
     yawObject.rotation.y=yaw;
     yawObject.position.y=PLAYER_HEIGHT;
 
-    // vitesse dynamique
-    let speed=BASE_WALK_SPEED*(sprint?SPRINT_MULT:1);
+    const speed=(isSprinting? BASE_WALK_SPEED*SPRINT_MULT:BASE_WALK_SPEED)*dt;
 
-    // déplacement
     const forward=new THREE.Vector3(0,0,-1).applyQuaternion(yawObject.quaternion).setY(0).normalize();
     const right=new THREE.Vector3(1,0,0).applyQuaternion(yawObject.quaternion).setY(0).normalize();
-    const deltaPos=forward.multiplyScalar(moveZ*speed*dt).add(right.multiplyScalar(moveX*speed*dt));
+    const deltaPos=forward.multiplyScalar(moveZ*speed).add(right.multiplyScalar(moveX*speed));
 
     const oldPos=yawObject.position.clone();
     yawObject.position.add(deltaPos);
 
-    // collisions map
     const bound=MAP_HALF-PLAYER_RADIUS-0.1;
     if(Math.abs(yawObject.position.x)>bound||Math.abs(yawObject.position.z)>bound){yawObject.position.copy(oldPos);}
     for(const w of walls){
-      if(Math.abs(yawObject.position.x-w.position.x)<CELL/2+PLAYER_RADIUS &&
-         Math.abs(yawObject.position.z-w.position.z)<CELL/2+PLAYER_RADIUS){
-        yawObject.position.copy(oldPos); break;
-      }
+      const dx=Math.abs(yawObject.position.x-w.position.x);
+      const dz=Math.abs(yawObject.position.z-w.position.z);
+      if(dx<CELL/2+PLAYER_RADIUS && dz<CELL/2+PLAYER_RADIUS){yawObject.position.copy(oldPos);break;}
     }
 
-    // sons de pas
     const walking=(Math.abs(moveX)>0.01||Math.abs(moveZ)>0.01);
-    if(walking){
-      if(!footstep.isPlaying) footstep.play();
-      footstep.setPlaybackRate(sprint?1.6:1.0); // + rapide quand sprint
-    }else{
-      if(footstep.isPlaying) footstep.pause();
-    }
+    if(walking){ if(!footstep.isPlaying) footstep.play(); }
+    else{ if(footstep.isPlaying) footstep.pause(); }
 
     renderer.render(scene,camera);
   }
@@ -228,6 +219,7 @@
   </script>
 </body>
 </html>
+
 
 
 
