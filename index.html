@@ -1,221 +1,278 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <title>Backrooms FPS</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no" />
   <style>
-    html,body { height:100%; margin:0; background:#000; overflow:hidden; touch-action:none; -webkit-user-select:none; user-select:none;}
+    body { margin: 0; overflow: hidden; background: black; }
     #joystick {
-      position:absolute; left:20px; bottom:30px;
-      width:120px; height:120px; border-radius:50%;
-      background: rgba(255,255,255,0.06);
-      border: 2px solid rgba(255,255,255,0.12);
-      touch-action:none;
+      position: absolute; bottom: 30px; left: 30px;
+      width: 100px; height: 100px; border-radius: 50%;
+      background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.3);
+      touch-action: none;
     }
     #stick {
-      position:absolute; width:40px; height:40px; border-radius:50%;
-      background: rgba(255,255,255,0.6);
-      left:40px; top:40px;
-      box-shadow:0 1px 6px rgba(0,0,0,0.6);
-      transition: left 0.02s linear, top 0.02s linear;
+      position: absolute; left: 40px; top: 40px;
+      width: 40px; height: 40px; border-radius: 50%;
+      background: rgba(255,255,255,0.5);
     }
     #sprintBtn {
-      position:absolute; right:25px; bottom:40px;
-      width:90px; height:90px; border-radius:50%;
-      background: rgba(255,255,255,0.15);
-      border: 2px solid rgba(255,255,255,0.25);
-      color:white; font-size:18px; text-align:center; line-height:90px;
-      user-select:none;
+      position: absolute; bottom: 40px; right: 40px;
+      width: 80px; height: 80px; border-radius: 50%;
+      background: rgba(255,0,0,0.4); border: 2px solid rgba(255,255,255,0.6);
+      color: white; font-size: 18px; font-weight: bold;
+      display: flex; align-items: center; justify-content: center;
+      touch-action: none;
     }
   </style>
 </head>
 <body>
   <div id="joystick"><div id="stick"></div></div>
-  <div id="sprintBtn">Sprint</div>
-
+  <div id="sprintBtn">RUN</div>
   <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
+
   <script>
-  // ---------- CONFIG ----------
-  const MAP_HALF = 80;
-  const CELL = 10;
-  const PLAYER_HEIGHT = 1.6;
-  const PLAYER_RADIUS = 0.5;
-  const BASE_WALK_SPEED = 2.5;
-  const SPRINT_MULT = 2.0;
-  const CAMERA_SENSITIVITY = 0.0035;
-  const PITCH_LIMIT = Math.PI * 0.47;
-  const JOY_MAX = 60, JOY_DEADZONE = 0.15; // joystick plus grand
+    // ---------- SCENE ----------
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({antialias:true});
+    renderer.setSize(innerWidth, innerHeight);
+    document.body.appendChild(renderer.domElement);
 
-  // ---------- SCENE ----------
-  const scene = new THREE.Scene();
-  scene.fog = new THREE.FogExp2(0xe6e6d8, 0.004); // plus épais = optimisation
+    camera.position.set(0, 1.6, 0);
 
-  const renderer = new THREE.WebGLRenderer({antialias:true});
-  renderer.setPixelRatio(window.devicePixelRatio || 1);
-  renderer.setSize(innerWidth, innerHeight);
-  renderer.setClearColor(0x000000,1);
-  document.body.appendChild(renderer.domElement);
+    // ---------- TEXTURES ----------
+    const loader = new THREE.TextureLoader();
+    const texFloor = loader.load("https://ambientcg.com/get?file=Carpet006_1K_Color.jpg");
+    texFloor.wrapS = texFloor.wrapT = THREE.RepeatWrapping;
+    texFloor.repeat.set(20,20);
 
-  const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 1000);
-  camera.rotation.order = 'YXZ';
-  const yawObject = new THREE.Object3D();
-  const pitchObject = new THREE.Object3D();
-  yawObject.add(pitchObject);
-  pitchObject.add(camera);
-  yawObject.position.set(0, PLAYER_HEIGHT, 0);
-  scene.add(yawObject);
+    const texWall = loader.load("https://ambientcg.com/get?file=Wallpaper001_1K_Color.jpg");
+    texWall.wrapS = texWall.wrapT = THREE.RepeatWrapping;
+    texWall.repeat.set(10,4);
 
-  // ---------- TEXTURES ----------
-  const loader = new THREE.TextureLoader();
-  const texFloor = loader.load("https://ambientcg.com/get?file=Carpet006_1K_Color.jpg");
-  texFloor.wrapS = texFloor.wrapT = THREE.RepeatWrapping; texFloor.repeat.set(60,60);
-  const texWall = loader.load("https://ambientcg.com/get?file=Wallpaper001_1K_Color.jpg");
-  texWall.wrapS = texWall.wrapT = THREE.RepeatWrapping; texWall.repeat.set(4,2);
-  const texCeil = loader.load("https://ambientcg.com/get?file=CeilingTile001_1K_Color.jpg");
-  texCeil.wrapS = texCeil.wrapT = THREE.RepeatWrapping; texCeil.repeat.set(60,60);
+    const texCeil = loader.load("https://ambientcg.com/get?file=CeilingTile001_1K_Color.jpg");
+    texCeil.wrapS = texCeil.wrapT = THREE.RepeatWrapping;
+    texCeil.repeat.set(20,20);
 
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(MAP_HALF*2, MAP_HALF*2), new THREE.MeshStandardMaterial({map:texFloor}));
-  floor.rotation.x = -Math.PI/2; scene.add(floor);
-  const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(MAP_HALF*2, MAP_HALF*2), new THREE.MeshStandardMaterial({map:texCeil}));
-  ceiling.position.y = 3; ceiling.rotation.x = Math.PI/2; scene.add(ceiling);
+    // Sol
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(100,100), new THREE.MeshStandardMaterial({map: texFloor}));
+    floor.rotation.x = -Math.PI/2;
+    scene.add(floor);
 
-  // murs
-  const walls = [];
-  const wallGeo = new THREE.BoxGeometry(CELL,3,CELL);
-  const wallMat = new THREE.MeshStandardMaterial({map:texWall});
-  for (let x=-MAP_HALF+CELL/2; x<=MAP_HALF-CELL/2; x+=CELL){
-    for (let z=-MAP_HALF+CELL/2; z<=MAP_HALF-CELL/2; z+=CELL){
-      const isBorder = Math.abs(x)>MAP_HALF-CELL*1.5 || Math.abs(z)>MAP_HALF-CELL*1.5;
-      if(isBorder || Math.random()>0.82){
-        const w = new THREE.Mesh(wallGeo, wallMat);
-        w.position.set(x,1.5,z);
-        scene.add(w); walls.push(w);
+    // Plafond
+    const ceil = new THREE.Mesh(new THREE.PlaneGeometry(100,100), new THREE.MeshStandardMaterial({map: texCeil}));
+    ceil.rotation.x = Math.PI/2;
+    ceil.position.y = 3;
+    scene.add(ceil);
+
+    // ---------- MURS ----------
+    const walls = [];
+    const CELL = 10;
+    for (let x=-50; x<=50; x+=CELL) {
+      for (let z=-50; z<=50; z+=CELL) {
+        if (Math.random() > 0.75) {
+          const wall = new THREE.Mesh(
+            new THREE.BoxGeometry(CELL,3,CELL),
+            new THREE.MeshStandardMaterial({map: texWall})
+          );
+          wall.position.set(x,1.5,z);
+          scene.add(wall);
+          walls.push(wall);
+        }
       }
     }
-  }
 
-  // lumières optimisées
-  scene.add(new THREE.AmbientLight(0xffffe0,0.45));
-  for(let i=-60;i<=60;i+=30){
-    for(let j=-60;j<=60;j+=30){
-      const l=new THREE.PointLight(0xffffcc,0.65,22,2.5);
-      l.position.set(i,2.8,j);
-      scene.add(l);
-    }
-  }
-
-  // ---------- AUDIO ----------
-  const listener = new THREE.AudioListener();
-  camera.add(listener);
-  const footstep = new THREE.Audio(listener);
-  new THREE.AudioLoader().load("https://cdn.pixabay.com/download/audio/2021/08/04/audio_b64f3a542a.mp3?filename=footstep-carpet-1-6553.mp3",
-    (buf)=>{ footstep.setBuffer(buf); footstep.setLoop(true); footstep.setVolume(0.45); });
-
-  // ---------- INPUT ----------
-  let yaw=0, pitch=0;
-  let moveX=0, moveZ=0;
-  let isSprinting=false;
-
-  // joystick
-  let joyTouchId=null, joyCenter={x:0,y:0}, joyActive=false;
-  const joystick=document.getElementById("joystick");
-  const stick=document.getElementById("stick");
-
-  joystick.addEventListener("touchstart",e=>{
-    const t=e.changedTouches[0]; joyTouchId=t.identifier; joyActive=true;
-    const r=joystick.getBoundingClientRect();
-    joyCenter={x:r.left+r.width/2,y:r.top+r.height/2};
-  });
-  joystick.addEventListener("touchmove",e=>{
-    for(const t of e.changedTouches){
-      if(t.identifier===joyTouchId && joyActive){
-        const dx=t.clientX-joyCenter.x, dy=t.clientY-joyCenter.y;
-        const dist=Math.min(Math.hypot(dx,dy),JOY_MAX);
-        const ang=Math.atan2(dy,dx);
-        stick.style.left=`${60+dist*Math.cos(ang)-20}px`;
-        stick.style.top =`${60+dist*Math.sin(ang)-20}px`;
-        let nx=dx/JOY_MAX, ny=dy/JOY_MAX, len=Math.hypot(nx,ny);
-        if(len<JOY_DEADZONE){ moveX=0; moveZ=0; }
-        else{ nx/=len; ny/=len; moveX=nx; moveZ=-ny; }
+    // ---------- LUMIÈRES ----------
+    scene.add(new THREE.AmbientLight(0xffffe0, 0.6));
+    for (let i=-40; i<=40; i+=20) {
+      for (let j=-40; j<=40; j+=20) {
+        const light = new THREE.PointLight(0xffffcc, 0.8, 30);
+        light.position.set(i, 2.9, j);
+        scene.add(light);
       }
     }
-  });
-  joystick.addEventListener("touchend",e=>{
-    for(const t of e.changedTouches){
-      if(t.identifier===joyTouchId){ joyActive=false; joyTouchId=null; moveX=0; moveZ=0;
-        stick.style.left="40px"; stick.style.top="40px"; }
-    }
-  });
 
-  // caméra tactile
-  let camTouchId=null,lastX=0,lastY=0;
-  document.addEventListener("touchstart",e=>{
-    for(const t of e.changedTouches){
-      if(!t.target.closest("#joystick") && camTouchId===null && !t.target.closest("#sprintBtn")){
-        camTouchId=t.identifier; lastX=t.clientX; lastY=t.clientY;
+    // ---------- VARIABLES FPS ----------
+    let yaw = 0, pitch = 0;
+    let moveX = 0, moveZ = 0;
+    let sprint = false;
+
+    // ---------- JOYSTICK ----------
+    const joystick = document.getElementById("joystick");
+    const stick = document.getElementById("stick");
+    let joyActive = false, joyCenter = {x:0,y:0}, joyTouchId = null;
+
+    joystick.addEventListener("touchstart", e=>{
+      const t = e.changedTouches[0];
+      joyTouchId = t.identifier;
+      joyActive = true;
+      const r = joystick.getBoundingClientRect();
+      joyCenter = {x: r.left+r.width/2, y:r.top+r.height/2};
+    });
+
+    joystick.addEventListener("touchend", e=>{
+      for (const t of e.changedTouches) {
+        if (t.identifier === joyTouchId) {
+          joyActive = false;
+          joyTouchId = null;
+          stick.style.left="40px"; stick.style.top="40px";
+          moveX=moveZ=0;
+        }
+      }
+    });
+
+    joystick.addEventListener("touchmove", e=>{
+      for (const t of e.changedTouches) {
+        if (t.identifier === joyTouchId && joyActive) {
+          const dx = t.clientX - joyCenter.x;
+          const dy = t.clientY - joyCenter.y;
+          const maxDist = 50;
+          let dist = Math.min(Math.sqrt(dx*dx + dy*dy), maxDist);
+          const ang = Math.atan2(dy, dx);
+          stick.style.left = 40 + dist * Math.cos(ang) - 20 + "px";
+          stick.style.top  = 40 + dist * Math.sin(ang) - 20 + "px";
+
+          let nx = dx / maxDist;
+          let ny = dy / maxDist;
+          const len = Math.sqrt(nx*nx + ny*ny);
+          if (len > 0) { nx /= len; ny /= len; }
+          moveX = nx;
+          moveZ = -ny;
+        }
+      }
+    });
+
+    // ---------- CAMERA TOUCH ----------
+    let camTouchId = null;
+    let lastX=null,lastY=null;
+
+    document.addEventListener("touchstart", e=>{
+      for (const t of e.changedTouches) {
+        if (!t.target.closest("#joystick") && camTouchId===null && !t.target.closest("#sprintBtn")) {
+          camTouchId = t.identifier;
+          lastX = t.clientX;
+          lastY = t.clientY;
+        }
+      }
+    });
+
+    document.addEventListener("touchmove", e=>{
+      for (const t of e.changedTouches) {
+        if (t.identifier === camTouchId) {
+          const dx=t.clientX-lastX;
+          const dy=t.clientY-lastY;
+          lastX=t.clientX; lastY=t.clientY;
+          yaw -= dx*0.0025;
+          pitch -= dy*0.0025;
+          const limit = Math.PI/2.1;
+          pitch=Math.max(-limit,Math.min(limit,pitch));
+        }
+      }
+    });
+
+    document.addEventListener("touchend", e=>{
+      for (const t of e.changedTouches) {
+        if (t.identifier === camTouchId) {
+          camTouchId=null; lastX=null; lastY=null;
+        }
+      }
+    });
+
+    // ---------- BOUTON SPRINT ----------
+    const sprintBtn = document.getElementById("sprintBtn");
+    sprintBtn.addEventListener("touchstart", ()=> sprint = true);
+    sprintBtn.addEventListener("touchend", ()=> sprint = false);
+
+    // ---------- MONSTRE ----------
+    const monster = new THREE.Mesh(
+      new THREE.BoxGeometry(1, 2, 1),
+      new THREE.MeshStandardMaterial({color: 0xff0000, emissive: 0x440000})
+    );
+    monster.position.set(10,1,10);
+    scene.add(monster);
+
+    let monsterActive = false;
+    let monsterTimer = 0;
+    const monsterSpeed = 1.0;
+
+    function updateMonster(delta) {
+      monsterTimer += delta;
+
+      // cycle apparition/disparition
+      if (monsterActive && monsterTimer >= 60) {
+        monsterActive = false;
+        monster.visible = false;
+        monsterTimer = 0;
+      } else if (!monsterActive && monsterTimer >= 60) {
+        monsterActive = true;
+        monster.visible = true;
+        monsterTimer = 0;
+        // respawn loin
+        const dist = 20 + Math.random()*30;
+        const angle = Math.random()*Math.PI*2;
+        monster.position.set(
+          camera.position.x + Math.cos(angle)*dist,
+          1,
+          camera.position.z + Math.sin(angle)*dist
+        );
+      }
+
+      if (monsterActive) {
+        const dir = new THREE.Vector3().subVectors(camera.position, monster.position).normalize();
+        monster.position.addScaledVector(dir, monsterSpeed * delta);
+        if (monster.position.distanceTo(camera.position) < 1.5) {
+          alert("💀 Tu es mort dans les Backrooms...");
+          window.location.reload();
+        }
       }
     }
-  });
-  document.addEventListener("touchmove",e=>{
-    for(const t of e.changedTouches){
-      if(t.identifier===camTouchId){
-        const dx=t.clientX-lastX, dy=t.clientY-lastY;
-        lastX=t.clientX; lastY=t.clientY;
-        yaw-=dx*CAMERA_SENSITIVITY; pitch-=dy*CAMERA_SENSITIVITY;
-        pitch=Math.max(-PITCH_LIMIT,Math.min(PITCH_LIMIT,pitch));
+
+    // ---------- GAME LOOP ----------
+    const clock=new THREE.Clock();
+    function animate(){
+      requestAnimationFrame(animate);
+      const delta=clock.getDelta();
+      let speed = (sprint ? 3.0 : 1.5) * delta;
+
+      camera.rotation.x=pitch;
+      camera.rotation.y=yaw;
+      camera.position.y = 1.6;
+
+      const oldPos=camera.position.clone();
+      const forward=new THREE.Vector3(Math.sin(yaw),0,Math.cos(yaw));
+      const right=new THREE.Vector3().crossVectors(forward,new THREE.Vector3(0,1,0)).normalize();
+      camera.position.addScaledVector(forward, moveZ * speed);
+      camera.position.addScaledVector(right, -moveX * speed);
+
+      // collisions murs
+      const radius=0.5;
+      for(const wall of walls){
+        const dx=Math.abs(camera.position.x-wall.position.x);
+        const dz=Math.abs(camera.position.z-wall.position.z);
+        if(dx < CELL/2+radius && dz < CELL/2+radius){
+          camera.position.copy(oldPos);
+          break;
+        }
       }
+
+      // collisions bords
+      const limit=48;
+      if(Math.abs(camera.position.x)>limit || Math.abs(camera.position.z)>limit){
+        camera.position.copy(oldPos);
+      }
+
+      updateMonster(delta);
+      renderer.render(scene,camera);
     }
-  });
-  document.addEventListener("touchend",e=>{
-    for(const t of e.changedTouches){ if(t.identifier===camTouchId){camTouchId=null;} }
-  });
+    animate();
 
-  // bouton sprint
-  const sprintBtn=document.getElementById("sprintBtn");
-  sprintBtn.addEventListener("touchstart",()=>{ isSprinting=true; });
-  sprintBtn.addEventListener("touchend",()=>{ isSprinting=false; });
-
-  // ---------- LOOP ----------
-  const clock=new THREE.Clock();
-  function animate(){
-    requestAnimationFrame(animate);
-    const dt=clock.getDelta();
-
-    pitchObject.rotation.x=pitch;
-    yawObject.rotation.y=yaw;
-    yawObject.position.y=PLAYER_HEIGHT;
-
-    const speed=(isSprinting? BASE_WALK_SPEED*SPRINT_MULT:BASE_WALK_SPEED)*dt;
-
-    const forward=new THREE.Vector3(0,0,-1).applyQuaternion(yawObject.quaternion).setY(0).normalize();
-    const right=new THREE.Vector3(1,0,0).applyQuaternion(yawObject.quaternion).setY(0).normalize();
-    const deltaPos=forward.multiplyScalar(moveZ*speed).add(right.multiplyScalar(moveX*speed));
-
-    const oldPos=yawObject.position.clone();
-    yawObject.position.add(deltaPos);
-
-    const bound=MAP_HALF-PLAYER_RADIUS-0.1;
-    if(Math.abs(yawObject.position.x)>bound||Math.abs(yawObject.position.z)>bound){yawObject.position.copy(oldPos);}
-    for(const w of walls){
-      const dx=Math.abs(yawObject.position.x-w.position.x);
-      const dz=Math.abs(yawObject.position.z-w.position.z);
-      if(dx<CELL/2+PLAYER_RADIUS && dz<CELL/2+PLAYER_RADIUS){yawObject.position.copy(oldPos);break;}
-    }
-
-    const walking=(Math.abs(moveX)>0.01||Math.abs(moveZ)>0.01);
-    if(walking){ if(!footstep.isPlaying) footstep.play(); }
-    else{ if(footstep.isPlaying) footstep.pause(); }
-
-    renderer.render(scene,camera);
-  }
-  animate();
-
-  window.addEventListener("resize",()=>{
-    camera.aspect=innerWidth/innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(innerWidth,innerHeight);
-  });
+    // ---------- RESIZE ----------
+    window.addEventListener("resize", ()=>{
+      camera.aspect=innerWidth/innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth,innerHeight);
+    });
   </script>
 </body>
 </html>
