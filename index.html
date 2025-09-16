@@ -2,7 +2,7 @@
 <html lang="fr">
   <head>
     <meta charset="UTF-8" />
-    <title>Backrooms Mobile - Three.js</title>
+    <title>Backrooms Mobile - Toit + Joystick Fix</title>
     <style>
       body {
         margin: 0;
@@ -44,7 +44,7 @@
     </style>
   </head>
   <body>
-    <div id="hud">Backrooms Mobile - Joystick + Swipe</div>
+    <div id="hud">Backrooms Mobile - Joystick + Toit</div>
     <div id="joystick"><div id="stick"></div></div>
 
     <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
@@ -90,6 +90,14 @@
       floor.rotation.x = -Math.PI/2;
       scene.add(floor);
 
+      // Ceiling (plafond)
+      const ceilGeo = new THREE.PlaneGeometry(MAP_W * CELL, MAP_H * CELL);
+      const ceilMat = new THREE.MeshStandardMaterial({ color: 0xffffcc, roughness: 1 });
+      const ceiling = new THREE.Mesh(ceilGeo, ceilMat);
+      ceiling.rotation.x = Math.PI/2;
+      ceiling.position.y = 3; // hauteur du plafond
+      scene.add(ceiling);
+
       // ---------------- CONTROLS ----------------
       let yaw = 0, pitch = 0;
       let moveX = 0, moveZ = 0;
@@ -118,10 +126,14 @@
         const dy = t.clientY - joyCenter.y;
         const dist = Math.min(Math.sqrt(dx*dx + dy*dy), 40);
         const angle = Math.atan2(dy, dx);
+
+        // Position visuelle du stick
         stick.style.left = 35 + dist * Math.cos(angle) - 15 + "px";
         stick.style.top = 35 + dist * Math.sin(angle) - 15 + "px";
-        moveX = Math.cos(angle) * (dist/40);
-        moveZ = Math.sin(angle) * (dist/40);
+
+        // Axes normalisés (-1 à 1)
+        moveX = (dx / 40);
+        moveZ = (dy / 40);
       });
 
       // Camera swipe
@@ -156,12 +168,8 @@
         camera.rotation.x = pitch;
         camera.rotation.y = yaw;
 
-        // Forward vector
-        const forward = new THREE.Vector3(
-          Math.sin(yaw),
-          0,
-          Math.cos(yaw)
-        ).normalize();
+        // Directions
+        const forward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
         const right = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0,1,0)).normalize();
 
         camera.position.addScaledVector(forward, -moveZ * speed * 5);
