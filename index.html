@@ -2,13 +2,13 @@
 <html lang="fr">
   <head>
     <meta charset="UTF-8" />
-    <title>Backrooms Mobile - Toit + Joystick Fix</title>
+    <title>Backrooms avec Texture</title>
     <style>
       body {
         margin: 0;
         overflow: hidden;
         background: black;
-        touch-action: none; /* évite le scroll sur mobile */
+        touch-action: none;
       }
       #hud {
         position: absolute;
@@ -21,7 +21,6 @@
         background: rgba(0, 0, 0, 0.4);
         border-radius: 6px;
       }
-      /* joystick */
       #joystick {
         position: absolute;
         bottom: 30px;
@@ -44,30 +43,43 @@
     </style>
   </head>
   <body>
-    <div id="hud">Backrooms Mobile - Joystick + Toit</div>
+    <div id="hud">Backrooms : Texture Sol + Toit</div>
     <div id="joystick"><div id="stick"></div></div>
 
     <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/examples/js/loaders/TextureLoader.js"></script>
     <script>
-      // ---------------- SCENE INIT ----------------
       const scene = new THREE.Scene();
       scene.fog = new THREE.FogExp2(0xe6e6d8, 0.02);
 
       const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-      camera.position.set(0, 1.6, 0);
+      camera.position.set(0,1.6,0);
 
       const renderer = new THREE.WebGLRenderer({ antialias: true });
       renderer.setSize(window.innerWidth, window.innerHeight);
       document.body.appendChild(renderer.domElement);
 
-      // Lights
       const ambient = new THREE.AmbientLight(0xffffff, 0.3);
       scene.add(ambient);
       const dirLight = new THREE.DirectionalLight(0xffffee, 0.7);
-      dirLight.position.set(10, 20, 10);
+      dirLight.position.set(10,20,10);
       scene.add(dirLight);
 
-      // ---------------- MAP ----------------
+      // textures
+      const loader = new THREE.TextureLoader();
+      // Exemple de texture — assure-toi que la licence est OK pour ton usage
+      const solTextureUrl = 'https://3dtextures.me/wp-content/uploads/2024/06/Floor_Backrooms_001_DIFF_1K.jpg'; 
+      // (fictive ou à remplacer par une vraie URL)
+      let floorMat;
+      loader.load(solTextureUrl, (tex) => {
+        tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+        tex.repeat.set( MAP_W / 2, MAP_H / 2 );
+        floorMat = new THREE.MeshStandardMaterial({ map: tex, roughness: 1 });
+        floor.material = floorMat;
+      }, undefined, (err) => {
+        console.error('Erreur chargement texture sol :', err);
+      });
+
       const MAP_W = 40, MAP_H = 40, CELL = 4;
       const wallGeo = new THREE.BoxGeometry(CELL, 3, CELL);
       const wallMat = new THREE.MeshStandardMaterial({ color: 0xffffcc, roughness: 1 });
@@ -83,10 +95,11 @@
       }
       scene.add(walls);
 
-      // Floor
-      const floorGeo = new THREE.PlaneGeometry(MAP_W * CELL, MAP_H * CELL);
-      const floorMat = new THREE.MeshStandardMaterial({ color: 0xffffcc, roughness: 1 });
-      const floor = new THREE.Mesh(floorGeo, floorMat);
+      let floorGeo, floorMatDefault, floor;
+      // Floor par défaut (matériau neutre si texture pas encore chargée)
+      floorGeo = new THREE.PlaneGeometry(MAP_W * CELL, MAP_H * CELL);
+      floorMatDefault = new THREE.MeshStandardMaterial({ color: 0xffffcc, roughness: 1 });
+      floor = new THREE.Mesh(floorGeo, floorMatDefault);
       floor.rotation.x = -Math.PI/2;
       scene.add(floor);
 
@@ -95,14 +108,12 @@
       const ceilMat = new THREE.MeshStandardMaterial({ color: 0xffffcc, roughness: 1 });
       const ceiling = new THREE.Mesh(ceilGeo, ceilMat);
       ceiling.rotation.x = Math.PI/2;
-      ceiling.position.y = 3; // hauteur du plafond
+      ceiling.position.y = 3;
       scene.add(ceiling);
 
-      // ---------------- CONTROLS ----------------
       let yaw = 0, pitch = 0;
       let moveX = 0, moveZ = 0;
 
-      // Joystick
       const joystick = document.getElementById("joystick");
       const stick = document.getElementById("stick");
       let joyActive = false;
@@ -126,17 +137,12 @@
         const dy = t.clientY - joyCenter.y;
         const dist = Math.min(Math.sqrt(dx*dx + dy*dy), 40);
         const angle = Math.atan2(dy, dx);
-
-        // Position visuelle du stick
         stick.style.left = 35 + dist * Math.cos(angle) - 15 + "px";
         stick.style.top = 35 + dist * Math.sin(angle) - 15 + "px";
-
-        // Axes normalisés (-1 à 1)
         moveX = (dx / 40);
         moveZ = (dy / 40);
       });
 
-      // Camera swipe
       let lastTouchX = null, lastTouchY = null;
       document.addEventListener("touchstart", (e) => {
         if (!e.target.closest("#joystick")) {
@@ -155,20 +161,19 @@
           pitch = Math.max(-Math.PI/2, Math.min(Math.PI/2, pitch));
         }
       });
-      document.addEventListener("touchend", () => { lastTouchX = null; lastTouchY = null; });
+      document.addEventListener("touchend", () => {
+        lastTouchX = null; lastTouchY = null;
+      });
 
-      // ---------------- GAME LOOP ----------------
       const clock = new THREE.Clock();
       function animate() {
         requestAnimationFrame(animate);
         const delta = clock.getDelta();
         const speed = 5 * delta;
 
-        // Update camera rotation
         camera.rotation.x = pitch;
         camera.rotation.y = yaw;
 
-        // Directions
         const forward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
         const right = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0,1,0)).normalize();
 
@@ -179,15 +184,15 @@
       }
       animate();
 
-      // Resize
       window.addEventListener("resize", () => {
-        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.aspect = window.innerWidth/window.innerHeight;
         camera.updateProjectionMatrix();
         renderer.setSize(window.innerWidth, window.innerHeight);
       });
     </script>
   </body>
 </html>
+
 
 
 
