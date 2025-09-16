@@ -2,7 +2,7 @@
 <html lang="fr">
   <head>
     <meta charset="UTF-8" />
-    <title>Backrooms Texturé</title>
+    <title>Backrooms avec Néons</title>
     <style>
       body {
         margin: 0;
@@ -43,7 +43,7 @@
     </style>
   </head>
   <body>
-    <div id="hud">Backrooms : Textures CC0</div>
+    <div id="hud">Backrooms : Néons clignotants</div>
     <div id="joystick"><div id="stick"></div></div>
 
     <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
@@ -58,16 +58,12 @@
       renderer.setSize(window.innerWidth, window.innerHeight);
       document.body.appendChild(renderer.domElement);
 
-      const ambient = new THREE.AmbientLight(0xffffff, 0.4);
+      const ambient = new THREE.AmbientLight(0xffffff, 0.2);
       scene.add(ambient);
-      const dirLight = new THREE.DirectionalLight(0xffffee, 0.8);
-      dirLight.position.set(10,20,10);
-      scene.add(dirLight);
 
       // ---------------- MAP ----------------
       const MAP_W = 40, MAP_H = 40, CELL = 4;
 
-      // Texture loader
       const loader = new THREE.TextureLoader();
 
       const wallTex = loader.load("https://ambientcg.com/get?file=Wallpaper001_1K-JPG_Color.jpg");
@@ -82,12 +78,10 @@
       ceilTex.wrapS = ceilTex.wrapT = THREE.RepeatWrapping;
       ceilTex.repeat.set(MAP_W/2, MAP_H/2);
 
-      // Materials
       const wallMat = new THREE.MeshStandardMaterial({ map: wallTex });
       const floorMat = new THREE.MeshStandardMaterial({ map: floorTex });
       const ceilMat = new THREE.MeshStandardMaterial({ map: ceilTex });
 
-      // Walls
       const wallGeo = new THREE.BoxGeometry(CELL, 3, CELL);
       const walls = new THREE.Group();
       for (let y = 0; y < MAP_H; y++) {
@@ -101,18 +95,35 @@
       }
       scene.add(walls);
 
-      // Floor
       const floorGeo = new THREE.PlaneGeometry(MAP_W * CELL, MAP_H * CELL);
       const floor = new THREE.Mesh(floorGeo, floorMat);
       floor.rotation.x = -Math.PI/2;
       scene.add(floor);
 
-      // Ceiling
       const ceilGeo = new THREE.PlaneGeometry(MAP_W * CELL, MAP_H * CELL);
       const ceiling = new THREE.Mesh(ceilGeo, ceilMat);
       ceiling.rotation.x = Math.PI/2;
       ceiling.position.y = 3;
       scene.add(ceiling);
+
+      // ---------------- NEONS ----------------
+      const neonLights = [];
+      const neonMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+      const neonGeo = new THREE.CylinderGeometry(0.05, 0.05, 1.2, 8);
+
+      for (let x = -MAP_W/2; x < MAP_W/2; x += 6) {
+        for (let z = -MAP_H/2; z < MAP_H/2; z += 6) {
+          const light = new THREE.PointLight(0xffffff, 1.5, 10, 2);
+          light.position.set(x*CELL, 2.9, z*CELL);
+          scene.add(light);
+          neonLights.push(light);
+
+          const tube = new THREE.Mesh(neonGeo, neonMat);
+          tube.rotation.z = Math.PI/2;
+          tube.position.copy(light.position);
+          scene.add(tube);
+        }
+      }
 
       // ---------------- CONTROLS ----------------
       let yaw = 0, pitch = 0;
@@ -172,16 +183,22 @@
       function animate() {
         requestAnimationFrame(animate);
         const delta = clock.getDelta();
-        const speed = 5 * delta;
+        const t = clock.elapsedTime;
 
+        // camera
         camera.rotation.x = pitch;
         camera.rotation.y = yaw;
 
+        const speed = 5 * delta;
         const forward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
         const right = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0,1,0)).normalize();
-
         camera.position.addScaledVector(forward, -moveZ * speed * 5);
         camera.position.addScaledVector(right, moveX * speed * 5);
+
+        // neon flicker
+        neonLights.forEach((light, i) => {
+          light.intensity = 1.2 + 0.3 * Math.sin(t * 8 + i);
+        });
 
         renderer.render(scene, camera);
       }
@@ -195,6 +212,7 @@
     </script>
   </body>
 </html>
+
 
 
 
