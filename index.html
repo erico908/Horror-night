@@ -2,323 +2,160 @@
 <html lang="fr">
 <head>
   <meta charset="utf-8" />
-  <title>Backrooms - Grande Map</title>
+  <title>Backrooms - Grande Map (Couleurs)</title>
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
   <style>
     html,body{height:100%;margin:0;background:#000;overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none}
     #hud{position:absolute;left:10px;top:10px;color:#fff;font-family:monospace;background:rgba(0,0,0,0.35);padding:6px 8px;border-radius:6px;z-index:10;font-size:13px}
     #joystick{position:absolute;left:18px;bottom:18px;width:84px;height:84px;border-radius:50%;background:rgba(255,255,255,0.06);z-index:9;display:flex;align-items:center;justify-content:center;touch-action:none}
     #stick{width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,0.55);transform:translate(0,0)}
-    #reset{position:absolute;right:12px;top:12px;z-index:10;color:#fff;background:rgba(0,0,0,0.35);padding:6px 8px;border-radius:6px;font-family:monospace;font-size:13px;cursor:pointer}
   </style>
 </head>
 <body>
-  <div id="hud">Position: <span id="pos">0,0</span> • Murs: <span id="count">0</span></div>
-  <div id="reset">Reset</div>
+  <div id="hud">Position: <span id="pos">0,0</span></div>
   <div id="joystick"><div id="stick"></div></div>
 
   <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
   <script>
   /* ---------------- CONFIG ---------------- */
-  const MAP_SIZE = 1000;        // total size (square) in world units
-  const CELL_SIZE = 5;          // each grid cell size
-  const CELLS_PER_SIDE = Math.floor(MAP_SIZE / CELL_SIZE); // 200
-  const HALF_MAP = MAP_SIZE / 2;
-  const WALL_PROB = 0.28;       // probability to spawn a wall in a cell
-  const PLAYER_RADIUS = 0.45;   // collision sphere radius
-  const WALK_SPEED = 1.5;       // m/s
-  const LIGHT_SPACING = 80;     // spacing between neon lights
+  const MAP_SIZE = 500;        // taille totale
+  const CELL_SIZE = 10;        // taille d'une case
+  const WALL_PROB = 0.3;       // densité de murs
+  const WALK_SPEED = 1.5;      // vitesse réaliste
+  const PLAYER_RADIUS = 0.5;   // rayon de collision
 
   /* ---------------- THREE SETUP ---------------- */
   const scene = new THREE.Scene();
-  scene.fog = new THREE.FogExp2(0xe6e6d8, 0.0022);
-
-  const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 3000);
-  camera.position.set(0, 1.6, 0);
+  const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 2000);
+  camera.position.set(0, 1.7, 0);
 
   const renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
   renderer.setSize(innerWidth, innerHeight);
   document.body.appendChild(renderer.domElement);
 
   /* ---------------- LIGHTING ---------------- */
-  scene.add(new THREE.HemisphereLight(0xffffe0, 0x404040, 0.62)); // global soft
+  scene.add(new THREE.AmbientLight(0xffffff, 1.2));
 
-  /* ---------------- TEXTURES & MATERIALS ---------------- */
-  const loader = new THREE.TextureLoader();
-  const texFloor = loader.load("https://ambientcg.com/get?file=Carpet006_1K_Color.jpg");
-  texFloor.wrapS = texFloor.wrapT = THREE.RepeatWrapping;
-  const texWall = loader.load("https://ambientcg.com/get?file=Wallpaper001_1K_Color.jpg");
-  texWall.wrapS = texWall.wrapT = THREE.RepeatWrapping;
-  const texCeil = loader.load("https://ambientcg.com/get?file=CeilingTile001_1K_Color.jpg");
-  texCeil.wrapS = texCeil.wrapT = THREE.RepeatWrapping;
-
-  // Materials base (we'll clone for instanced if needed)
-  const floorMat = new THREE.MeshStandardMaterial({ map: texFloor, roughness: 1 });
-  const ceilMat = new THREE.MeshStandardMaterial({ map: texCeil, roughness: 1 });
-  const wallMat = new THREE.MeshStandardMaterial({ map: texWall, roughness: 1 });
+  /* ---------------- MATERIALS ---------------- */
+  const floorMat = new THREE.MeshStandardMaterial({ color: 0xffffcc });
+  const ceilMat  = new THREE.MeshStandardMaterial({ color: 0xffffff });
+  const wallMat  = new THREE.MeshStandardMaterial({ color: 0xe6e6b8 });
 
   /* ---------------- FLOOR & CEILING ---------------- */
-  // Floor big plane
-  const floorGeo = new THREE.PlaneGeometry(MAP_SIZE, MAP_SIZE, 1, 1);
-  const floorMesh = new THREE.Mesh(floorGeo, floorMat);
-  floorMesh.rotation.x = -Math.PI/2;
-  // adjust tiling
-  floorMesh.material.map.repeat.set(MAP_SIZE / 10, MAP_SIZE / 10);
-  scene.add(floorMesh);
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(MAP_SIZE, MAP_SIZE), floorMat);
+  floor.rotation.x = -Math.PI/2;
+  scene.add(floor);
 
-  // Ceiling big plane
-  const ceilGeo = new THREE.PlaneGeometry(MAP_SIZE, MAP_SIZE, 1, 1);
-  const ceilMesh = new THREE.Mesh(ceilGeo, ceilMat);
-  ceilMesh.rotation.x = Math.PI/2;
-  ceilMesh.position.y = 3;
-  ceilMesh.material.map.repeat.set(MAP_SIZE / 10, MAP_SIZE / 10);
-  scene.add(ceilMesh);
+  const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(MAP_SIZE, MAP_SIZE), ceilMat);
+  ceiling.rotation.x = Math.PI/2;
+  ceiling.position.y = 3;
+  scene.add(ceiling);
 
-  /* ---------------- WALLS (InstancedMesh) ---------------- */
-  // We'll build all wall instance matrices in an array and then create one InstancedMesh
-  const wallGeo = new THREE.BoxGeometry(CELL_SIZE, 3, CELL_SIZE);
-  const estimatedCells = CELLS_PER_SIDE * CELLS_PER_SIDE;
-  const instanceMatrices = [];
-  const occupied = new Set(); // store occupied cell indices "ix,iz" for collision checks
-
-  // Generate grid centered at origin
-  for (let iz = 0; iz < CELLS_PER_SIDE; iz++) {
-    for (let ix = 0; ix < CELLS_PER_SIDE; ix++) {
-      // Avoid placing walls on a central spawn zone (around 0,0)
-      const worldX = ix * CELL_SIZE - HALF_MAP + CELL_SIZE/2;
-      const worldZ = iz * CELL_SIZE - HALF_MAP + CELL_SIZE/2;
-
-      // Make spawn area clearer: keep cells within a small radius empty so player not stuck at start
-      const safeRadius = 6 * CELL_SIZE; // ~30 units
-      if (Math.hypot(worldX, worldZ) < safeRadius) continue;
-
-      if (Math.random() < WALL_PROB) {
-        const obj = new THREE.Object3D();
-        obj.position.set(worldX, 1.5, worldZ);
-        obj.updateMatrix();
-        instanceMatrices.push(obj.matrix.clone());
-        // compute cell indices for collision usage
-        const ciX = ix, ciZ = iz;
-        occupied.add(`${ciX},${ciZ}`);
+  /* ---------------- WALLS ---------------- */
+  const walls = [];
+  for (let x = -MAP_SIZE/2; x < MAP_SIZE/2; x += CELL_SIZE) {
+    for (let z = -MAP_SIZE/2; z < MAP_SIZE/2; z += CELL_SIZE) {
+      if (Math.random() < WALL_PROB && Math.hypot(x,z) > 20) {
+        const wall = new THREE.Mesh(
+          new THREE.BoxGeometry(CELL_SIZE, 3, CELL_SIZE),
+          wallMat
+        );
+        wall.position.set(x, 1.5, z);
+        scene.add(wall);
+        walls.push(wall);
       }
     }
   }
 
-  // Create instanced mesh
-  const instCount = instanceMatrices.length;
-  const wallInst = new THREE.InstancedMesh(wallGeo, wallMat.clone(), instCount);
-  wallInst.instanceMatrix.setUsage(THREE.StaticDrawUsage);
-  for (let i = 0; i < instCount; i++) {
-    wallInst.setMatrixAt(i, instanceMatrices[i]);
-  }
-  wallInst.castShadow = false;
-  wallInst.receiveShadow = false;
-  scene.add(wallInst);
-
-  // Update HUD count
-  document.getElementById('count').textContent = instCount;
-
-  /* ---------------- NEON POINT LIGHTS ---------------- */
-  for (let x = -MAP_SIZE/2 + LIGHT_SPACING/2; x <= MAP_SIZE/2; x += LIGHT_SPACING) {
-    for (let z = -MAP_SIZE/2 + LIGHT_SPACING/2; z <= MAP_SIZE/2; z += LIGHT_SPACING) {
-      const pl = new THREE.PointLight(0xffffcc, 0.8, LIGHT_SPACING * 1.4);
-      pl.position.set(x, 2.9, z);
-      scene.add(pl);
-    }
-  }
-
-  /* ---------------- INPUT (joystick + swipe + desktop) ---------------- */
+  /* ---------------- JOYSTICK ---------------- */
   const joystick = document.getElementById('joystick');
   const stick = document.getElementById('stick');
-
-  let joyActive = false, joyCenter = { x: 0, y: 0 }, moveX = 0, moveZ = 0;
-  let yaw = 0, pitch = 0;
-  let lastTouchX = null, lastTouchY = null;
-  const keys = {};
-  let pointerLocked = false;
-
-  // joystick handlers
-  joystick.addEventListener('touchstart', (e) => {
+  let joyActive = false, joyCenter = {x:0,y:0}, moveX=0, moveZ=0;
+  joystick.addEventListener('touchstart',(e)=>{
     e.preventDefault(); joyActive = true;
     const r = joystick.getBoundingClientRect();
-    joyCenter = { x: r.left + r.width/2, y: r.top + r.height/2 };
-  }, { passive: false });
-
-  joystick.addEventListener('touchend', (e) => {
-    e.preventDefault(); joyActive = false; moveX = 0; moveZ = 0;
-    stick.style.transform = 'translate(0px,0px)';
-  }, { passive: false });
-
-  joystick.addEventListener('touchmove', (e) => {
+    joyCenter = {x:r.left+r.width/2,y:r.top+r.height/2};
+  });
+  joystick.addEventListener('touchend',(e)=>{
+    e.preventDefault(); joyActive = false; moveX=0; moveZ=0;
+    stick.style.transform='translate(0,0)';
+  });
+  joystick.addEventListener('touchmove',(e)=>{
     e.preventDefault();
-    if (!joyActive) return;
-    const t = e.touches[0];
-    const dx = t.clientX - joyCenter.x;
-    const dy = t.clientY - joyCenter.y;
-    const max = 36;
-    const dist = Math.min(Math.sqrt(dx*dx + dy*dy), max);
-    const ang = Math.atan2(dy, dx);
-    const sx = Math.cos(ang) * dist;
-    const sy = Math.sin(ang) * dist;
-    stick.style.transform = `translate(${sx}px, ${sy}px)`;
-    moveX = sx / max; moveZ = sy / max; // normalized -1..1
-  }, { passive: false });
-
-  // camera swipe
-  document.addEventListener('touchstart', (e) => {
-    if (e.target.closest('#joystick')) return;
-    lastTouchX = e.touches[0].clientX; lastTouchY = e.touches[0].clientY;
-  }, { passive: true });
-
-  document.addEventListener('touchmove', (e) => {
-    if (e.target.closest('#joystick')) return;
-    if (lastTouchX === null) return;
-    const dx = e.touches[0].clientX - lastTouchX;
-    const dy = e.touches[0].clientY - lastTouchY;
-    lastTouchX = e.touches[0].clientX; lastTouchY = e.touches[0].clientY;
-    yaw -= dx * 0.0022; pitch -= dy * 0.0022;
-    const limit = Math.PI / 2.4;
-    pitch = Math.max(-limit, Math.min(limit, pitch));
-  }, { passive: true });
-
-  document.addEventListener('touchend', (e) => { lastTouchX = null; lastTouchY = null; }, { passive: true });
-
-  // desktop support
-  window.addEventListener('keydown', (e) => keys[e.code] = true);
-  window.addEventListener('keyup', (e) => keys[e.code] = false);
-
-  renderer.domElement.addEventListener('click', () => {
-    renderer.domElement.requestPointerLock?.();
-  });
-  document.addEventListener('pointerlockchange', () => { pointerLocked = !!document.pointerLockElement; });
-  document.addEventListener('mousemove', (e) => {
-    if (!pointerLocked) return;
-    yaw -= e.movementX * 0.002; pitch -= e.movementY * 0.002;
-    const limit = Math.PI / 2.4;
-    pitch = Math.max(-limit, Math.min(limit, pitch));
+    if(!joyActive)return;
+    const t=e.touches[0];
+    const dx=t.clientX-joyCenter.x, dy=t.clientY-joyCenter.y;
+    const max=36;
+    const dist=Math.min(Math.sqrt(dx*dx+dy*dy),max);
+    const ang=Math.atan2(dy,dx);
+    const sx=Math.cos(ang)*dist, sy=Math.sin(ang)*dist;
+    stick.style.transform=`translate(${sx}px,${sy}px)`;
+    moveX=sx/max; moveZ=sy/max;
   });
 
-  document.getElementById('reset').addEventListener('click', () => {
-    camera.position.set(0,1.6,0); yaw = 0; pitch = 0;
+  /* ---------------- CAMERA CONTROL ---------------- */
+  let yaw=0,pitch=0,lastX=null,lastY=null;
+  document.addEventListener('touchstart',(e)=>{
+    if(e.target.closest('#joystick'))return;
+    lastX=e.touches[0].clientX; lastY=e.touches[0].clientY;
   });
+  document.addEventListener('touchmove',(e)=>{
+    if(e.target.closest('#joystick'))return;
+    if(lastX===null)return;
+    const dx=e.touches[0].clientX-lastX;
+    const dy=e.touches[0].clientY-lastY;
+    lastX=e.touches[0].clientX; lastY=e.touches[0].clientY;
+    yaw-=dx*0.0022; pitch-=dy*0.0022;
+    pitch=Math.max(-Math.PI/2.4,Math.min(Math.PI/2.4,pitch));
+  });
+  document.addEventListener('touchend',()=>{lastX=null;lastY=null;});
 
-  /* ---------------- COLLISION (grid occupancy) ---------------- */
-  // Helper: convert world position to cell indices (ix, iz)
-  function worldToCell(posX, posZ) {
-    // cell index from 0..CELLS_PER_SIDE-1
-    const fx = (posX + HALF_MAP) / CELL_SIZE;
-    const fz = (posZ + HALF_MAP) / CELL_SIZE;
-    const ix = Math.floor(fx);
-    const iz = Math.floor(fz);
-    return { ix, iz };
-  }
-
-  function checkCollisionSphere(posVec) {
-    // check neighbor cells around player's cell (3x3) to detect wall spheres
-    const { ix, iz } = worldToCell(posVec.x, posVec.z);
-    const radius = PLAYER_RADIUS;
-    const maxCheck = 1; // check immediate neighbors
-    for (let dz = -maxCheck; dz <= maxCheck; dz++) {
-      for (let dx = -maxCheck; dx <= maxCheck; dx++) {
-        const cx = ix + dx, cz = iz + dz;
-        if (cx < 0 || cz < 0 || cx >= CELLS_PER_SIDE || cz >= CELLS_PER_SIDE) continue;
-        if (occupied.has(`${cx},${cz}`)) {
-          // compute cell center coords
-          const centerX = cx * CELL_SIZE - HALF_MAP + CELL_SIZE/2;
-          const centerZ = cz * CELL_SIZE - HALF_MAP + CELL_SIZE/2;
-          // closest point on box to sphere center (AABB centered at cell center)
-          const half = CELL_SIZE / 2;
-          // compute squared distance from sphere center to AABB
-          let sq = 0;
-          const minX = centerX - half, maxX = centerX + half;
-          const minZ = centerZ - half, maxZ = centerZ + half;
-          if (posVec.x < minX) sq += (minX - posVec.x) ** 2;
-          else if (posVec.x > maxX) sq += (posVec.x - maxX) ** 2;
-          if (posVec.z < minZ) sq += (minZ - posVec.z) ** 2;
-          else if (posVec.z > maxZ) sq += (posVec.z - maxZ) ** 2;
-          // Y axis: walls go from 0..3
-          if (posVec.y < 0) sq += (0 - posVec.y) ** 2;
-          else if (posVec.y > 3) sq += (posVec.y - 3) ** 2;
-          if (sq < radius * radius) return true;
-        }
+  /* ---------------- COLLISIONS ---------------- */
+  function collides(pos){
+    for(const wall of walls){
+      const dx=Math.abs(pos.x-wall.position.x);
+      const dz=Math.abs(pos.z-wall.position.z);
+      if(dx < CELL_SIZE/2+PLAYER_RADIUS && dz < CELL_SIZE/2+PLAYER_RADIUS){
+        return true;
       }
     }
     return false;
   }
 
-  /* ---------------- ANIMATION / GAME LOOP ---------------- */
+  /* ---------------- ANIMATION ---------------- */
   const clock = new THREE.Clock();
-
-  function animate() {
+  function animate(){
     requestAnimationFrame(animate);
-    const dt = Math.min(clock.getDelta(), 0.05);
+    const dt=Math.min(clock.getDelta(),0.05);
 
-    // input
-    let inX = 0, inZ = 0;
-    if (keys['KeyW'] || keys['ArrowUp']) inZ -= 1;
-    if (keys['KeyS'] || keys['ArrowDown']) inZ += 1;
-    if (keys['KeyA'] || keys['ArrowLeft']) inX -= 1;
-    if (keys['KeyD'] || keys['ArrowRight']) inX += 1;
-    if (joyActive) { inX = moveX; inZ = moveZ; }
+    // direction
+    const forward=new THREE.Vector3(Math.sin(yaw),0,Math.cos(yaw));
+    const right=new THREE.Vector3(forward.z,0,-forward.x);
+    let move=new THREE.Vector3();
+    move.addScaledVector(forward,-moveZ);
+    move.addScaledVector(right,moveX);
+    if(move.lengthSq()>0)move.normalize();
 
-    // apply rotation to camera
-    camera.rotation.x = pitch;
-    camera.rotation.y = yaw;
+    // test collision
+    const next=camera.position.clone().addScaledVector(move,WALK_SPEED*dt);
+    if(!collides(next))camera.position.copy(next);
 
-    // build movement vector in world space
-    const forward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw)).normalize();
-    const right = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0,1,0)).normalize();
-    const moveVec = new THREE.Vector3();
-    moveVec.addScaledVector(forward, -inZ);
-    moveVec.addScaledVector(right, inX);
-    if (moveVec.lengthSq() > 1e-6) moveVec.normalize();
-
-    // proposed position
-    const proposed = camera.position.clone().addScaledVector(moveVec, WALK_SPEED * dt);
-    proposed.y = camera.position.y;
-
-    // collision test with sliding
-    if (!checkCollisionSphere(proposed)) {
-      camera.position.copy(proposed);
-    } else {
-      // try sliding on X
-      const tryX = camera.position.clone().addScaledVector(right, inX * WALK_SPEED * dt); tryX.y = camera.position.y;
-      if (!checkCollisionSphere(tryX)) camera.position.copy(tryX);
-      else {
-        const tryZ = camera.position.clone().addScaledVector(forward, -inZ * WALK_SPEED * dt); tryZ.y = camera.position.y;
-        if (!checkCollisionSphere(tryZ)) camera.position.copy(tryZ);
-      }
-    }
+    // rotation
+    camera.rotation.y=yaw;
+    camera.rotation.x=pitch;
 
     // HUD
-    document.getElementById('pos').textContent = `${camera.position.x.toFixed(1)}, ${camera.position.z.toFixed(1)}`;
+    document.getElementById('pos').textContent=`${camera.position.x.toFixed(1)},${camera.position.z.toFixed(1)}`;
 
-    renderer.render(scene, camera);
+    renderer.render(scene,camera);
   }
-
-  // start
   animate();
 
-  // resize handling
-  window.addEventListener('resize', () => {
-    camera.aspect = innerWidth / innerHeight;
+  window.addEventListener('resize',()=>{
+    camera.aspect=innerWidth/innerHeight;
     camera.updateProjectionMatrix();
-    renderer.setSize(innerWidth, innerHeight);
+    renderer.setSize(innerWidth,innerHeight);
   });
   </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-
