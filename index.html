@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
-  <title>Backrooms FPS - Optimisé</title>
+  <title>Backrooms FPS</title>
   <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no" />
   <style>
     html,body { height:100%; margin:0; background:#000; overflow:hidden; touch-action:none; -webkit-user-select:none; user-select:none;}
@@ -28,11 +28,11 @@
   <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
   <script>
   // ---------- CONFIG ----------
-  const MAP_HALF = 50;
+  const MAP_HALF = 80; // grande map
   const CELL = 10;
   const PLAYER_HEIGHT = 1.6;
   const PLAYER_RADIUS = 0.5;
-  const BASE_WALK_SPEED = 1.5; // augmenté
+  const BASE_WALK_SPEED = 2.5; // vitesse augmentée
   const CAMERA_SENSITIVITY = 0.0035;
   const PITCH_LIMIT = Math.PI * 0.47;
   const JOY_MAX = 40, JOY_DEADZONE = 0.15;
@@ -58,11 +58,11 @@
   // ---------- TEXTURES ----------
   const loader = new THREE.TextureLoader();
   const texFloor = loader.load("https://ambientcg.com/get?file=Carpet006_1K_Color.jpg");
-  texFloor.wrapS = texFloor.wrapT = THREE.RepeatWrapping; texFloor.repeat.set(40,40);
+  texFloor.wrapS = texFloor.wrapT = THREE.RepeatWrapping; texFloor.repeat.set(60,60);
   const texWall = loader.load("https://ambientcg.com/get?file=Wallpaper001_1K_Color.jpg");
   texWall.wrapS = texWall.wrapT = THREE.RepeatWrapping; texWall.repeat.set(4,2);
   const texCeil = loader.load("https://ambientcg.com/get?file=CeilingTile001_1K_Color.jpg");
-  texCeil.wrapS = texCeil.wrapT = THREE.RepeatWrapping; texCeil.repeat.set(40,40);
+  texCeil.wrapS = texCeil.wrapT = THREE.RepeatWrapping; texCeil.repeat.set(60,60);
 
   // floor & ceiling
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(MAP_HALF*2, MAP_HALF*2), new THREE.MeshStandardMaterial({map:texFloor}));
@@ -77,7 +77,7 @@
   for (let x=-MAP_HALF+CELL/2; x<=MAP_HALF-CELL/2; x+=CELL){
     for (let z=-MAP_HALF+CELL/2; z<=MAP_HALF-CELL/2; z+=CELL){
       const isBorder = Math.abs(x)>MAP_HALF-CELL*1.5 || Math.abs(z)>MAP_HALF-CELL*1.5;
-      if(isBorder || Math.random()>0.78){
+      if(isBorder || Math.random()>0.82){ // densité des murs
         const w = new THREE.Mesh(wallGeo, wallMat);
         w.position.set(x,1.5,z);
         scene.add(w); walls.push(w);
@@ -85,10 +85,10 @@
     }
   }
 
-  // lights (optimisé: moins de lights)
+  // lights
   scene.add(new THREE.AmbientLight(0xffffe0,0.5));
-  for(let i=-40;i<=40;i+=30){
-    for(let j=-40;j<=40;j+=30){
+  for(let i=-60;i<=60;i+=30){
+    for(let j=-60;j<=60;j+=30){
       const l=new THREE.PointLight(0xffffcc,0.7,25,2);
       l.position.set(i,2.8,j);
       scene.add(l);
@@ -101,7 +101,7 @@
   const footstep = new THREE.Audio(listener);
   const loaderAudio = new THREE.AudioLoader();
   loaderAudio.load("https://cdn.pixabay.com/download/audio/2021/08/04/audio_b64f3a542a.mp3?filename=footstep-carpet-1-6553.mp3",
-    (buf)=>{ footstep.setBuffer(buf); footstep.setLoop(true); footstep.setVolume(0.35); });
+    (buf)=>{ footstep.setBuffer(buf); footstep.setLoop(true); footstep.setVolume(0.4); });
 
   // ---------- INPUT ----------
   let yaw=0, pitch=0;
@@ -209,6 +209,7 @@
   </script>
 </body>
 </html>
+
 
 
 
