@@ -2,10 +2,10 @@
 <html lang="fr">
 <head>
   <meta charset="utf-8" />
-  <title>Backrooms Optimisé</title>
+  <title>Backrooms - Couleurs simples</title>
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
   <style>
-    html,body{height:100%;margin:0;background:#000;overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none}
+    html,body{height:100%;margin:0;background:#000;overflow:hidden;touch-action:none}
     #hud{position:absolute;left:10px;top:10px;color:#fff;font-family:monospace;background:rgba(0,0,0,0.35);padding:6px 8px;border-radius:6px;z-index:10;font-size:13px}
     #joystick{position:absolute;left:18px;bottom:18px;width:84px;height:84px;border-radius:50%;background:rgba(255,255,255,0.06);z-index:9;display:flex;align-items:center;justify-content:center;touch-action:none}
     #stick{width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,0.55);transform:translate(0,0)}
@@ -18,11 +18,11 @@
   <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
   <script>
   /* ---------------- CONFIG ---------------- */
-  const MAP_SIZE = 500;        
-  const CELL_SIZE = 10;        
-  const WALL_PROB = 0.3;       
-  const WALK_SPEED = 1.0;      // vitesse fixée à 1 m/s
-  const PLAYER_RADIUS = 0.5;   
+  const MAP_SIZE = 500;
+  const CELL_SIZE = 10;
+  const WALL_PROB = 0.3;
+  const WALK_SPEED = 1.0;      
+  const PLAYER_RADIUS = 0.5;
 
   /* ---------------- THREE SETUP ---------------- */
   const scene = new THREE.Scene();
@@ -34,29 +34,12 @@
   document.body.appendChild(renderer.domElement);
 
   /* ---------------- LIGHTING ---------------- */
-  scene.add(new THREE.AmbientLight(0xffffff, 1.2));
+  scene.add(new THREE.AmbientLight(0xffffff, 2)); // bien lumineux
 
-  /* ---------------- TEXTURES (optimisées petites images) ---------------- */
-  const loader = new THREE.TextureLoader();
-
-  // Sol : jaune foncé
-  const texFloor = loader.load("https://i.ibb.co/fFZ0xY7/darkyellow.jpg");
-  texFloor.wrapS = texFloor.wrapT = THREE.RepeatWrapping;
-  texFloor.repeat.set(50,50);
-
-  // Plafond : jaune clair
-  const texCeil = loader.load("https://i.ibb.co/hZHLFWY/lightyellow.jpg");
-  texCeil.wrapS = texCeil.wrapT = THREE.RepeatWrapping;
-  texCeil.repeat.set(50,50);
-
-  // Murs : jaune normal
-  const texWall = loader.load("https://i.ibb.co/M7hV4rp/midyellow.jpg");
-  texWall.wrapS = texWall.wrapT = THREE.RepeatWrapping;
-  texWall.repeat.set(2,2);
-
-  const floorMat = new THREE.MeshStandardMaterial({ map: texFloor });
-  const ceilMat  = new THREE.MeshStandardMaterial({ map: texCeil });
-  const wallMat  = new THREE.MeshStandardMaterial({ map: texWall });
+  /* ---------------- MATERIALS (COULEURS UNIQUES) ---------------- */
+  const floorMat = new THREE.MeshStandardMaterial({ color: 0xccaa33 });  // sol jaune foncé
+  const ceilMat  = new THREE.MeshStandardMaterial({ color: 0xffff66 });  // plafond jaune clair
+  const wallMat  = new THREE.MeshStandardMaterial({ color: 0xffee33 });  // murs jaune vif
 
   /* ---------------- FLOOR & CEILING ---------------- */
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(MAP_SIZE, MAP_SIZE), floorMat);
@@ -145,23 +128,19 @@
     requestAnimationFrame(animate);
     const dt=Math.min(clock.getDelta(),0.05);
 
-    // direction
     const forward=new THREE.Vector3(Math.sin(yaw),0,Math.cos(yaw));
     const right=new THREE.Vector3(forward.z,0,-forward.x);
     let move=new THREE.Vector3();
-    move.addScaledVector(forward,moveZ); // corrigé
+    move.addScaledVector(forward,moveZ); 
     move.addScaledVector(right,moveX);
     if(move.lengthSq()>0)move.normalize();
 
-    // test collision
     const next=camera.position.clone().addScaledVector(move,WALK_SPEED*dt);
     if(!collides(next))camera.position.copy(next);
 
-    // rotation
     camera.rotation.y=yaw;
     camera.rotation.x=pitch;
 
-    // HUD
     document.getElementById('pos').textContent=`${camera.position.x.toFixed(1)},${camera.position.z.toFixed(1)}`;
 
     renderer.render(scene,camera);
@@ -176,4 +155,5 @@
   </script>
 </body>
 </html>
+
 
