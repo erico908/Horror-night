@@ -30,13 +30,8 @@
     renderer.setSize(innerWidth, innerHeight);
     document.body.appendChild(renderer.domElement);
 
-    // ---------- FPS CAMERA SYSTEM ----------
-    const yawObject = new THREE.Object3D();
-    const pitchObject = new THREE.Object3D();
-    yawObject.add(pitchObject);
-    pitchObject.add(camera);
-    yawObject.position.set(0, 1.6, 0);
-    scene.add(yawObject);
+    // Position de la caméra (hauteur yeux)
+    camera.position.set(0, 1.6, 0);
 
     // ---------- TEXTURES ----------
     const loader = new THREE.TextureLoader();
@@ -128,14 +123,29 @@
     joystick.addEventListener("touchmove", e=>{
       for (const t of e.changedTouches) {
         if (t.identifier === joyTouchId && joyActive) {
-          const dx=t.clientX-joyCenter.x, dy=t.clientY-joyCenter.y;
+          const dx = t.clientX - joyCenter.x;
+          const dy = t.clientY - joyCenter.y;
+
           const maxDist = 40;
-          const dist = Math.min(Math.sqrt(dx*dx+dy*dy), maxDist);
+          let dist = Math.sqrt(dx*dx + dy*dy);
+          if (dist > maxDist) dist = maxDist;
+
           const ang = Math.atan2(dy, dx);
-          stick.style.left=35+dist*Math.cos(ang)-15+"px";
-          stick.style.top=35+dist*Math.sin(ang)-15+"px";
-          moveX = dx / maxDist;
-          moveZ = dy / maxDist;
+          stick.style.left = 35 + dist * Math.cos(ang) - 15 + "px";
+          stick.style.top  = 35 + dist * Math.sin(ang) - 15 + "px";
+
+          // Normalisation pour vitesse constante
+          let nx = dx / maxDist;
+          let ny = dy / maxDist;
+          const len = Math.sqrt(nx*nx + ny*ny);
+          if (len > 0) {
+            nx /= len;
+            ny /= len;
+          }
+
+          // Axes corrigés (intuitifs)
+          moveX = nx;    // gauche/droite
+          moveZ = -ny;   // haut = avancer, bas = reculer
         }
       }
     });
@@ -160,8 +170,10 @@
           const dx=t.clientX-lastX;
           const dy=t.clientY-lastY;
           lastX=t.clientX; lastY=t.clientY;
-          yaw -= dx*0.003;  
+          yaw -= dx*0.003;
           pitch -= dy*0.003;
+
+          // limite du regard vertical
           const limit = Math.PI/2.1;
           pitch=Math.max(-limit,Math.min(limit,pitch));
         }
@@ -182,36 +194,42 @@
     function animate(){
       requestAnimationFrame(animate);
       const delta=clock.getDelta();
-      const speed=0.75*delta;
+      const speed=1.2*delta; // vitesse uniforme
 
-      // applique rotations
-      pitchObject.rotation.x = pitch;
-      yawObject.rotation.y = yaw;
+      // applique la rotation caméra
+      camera.rotation.x=pitch;
+      camera.rotation.y=yaw;
 
-      const oldPos=yawObject.position.clone();
+      // garde la hauteur fixe
+      camera.position.y = 1.6;
 
-      const forward=new THREE.Vector3(0,0,-1).applyQuaternion(yawObject.quaternion);
-      const right=new THREE.Vector3(1,0,0).applyQuaternion(yawObject.quaternion);
+      // sauvegarde position
+      const oldPos=camera.position.clone();
 
-      yawObject.position.addScaledVector(forward, moveZ * speed * 2);
-      yawObject.position.addScaledVector(right, -moveX * speed * 2);
+      // vecteurs de déplacement
+      const forward=new THREE.Vector3(Math.sin(yaw),0,Math.cos(yaw));
+      const right=new THREE.Vector3().crossVectors(forward,new THREE.Vector3(0,1,0)).normalize();
 
-      // collisions murs
+      // déplacement fluide
+      camera.position.addScaledVector(forward, moveZ * speed * 3);
+      camera.position.addScaledVector(right, moveX * speed * 3);
+
+      // collisions avec murs
       const radius=0.5;
       for(const wall of walls){
-        const dx=Math.abs(yawObject.position.x-wall.position.x);
-        const dz=Math.abs(yawObject.position.z-wall.position.z);
+        const dx=Math.abs(camera.position.x-wall.position.x);
+        const dz=Math.abs(camera.position.z-wall.position.z);
         if(dx < CELL/2+radius && dz < CELL/2+radius){
-          yawObject.position.copy(oldPos);
+          camera.position.copy(oldPos);
           break;
         }
       }
 
-      // collisions bords map
-      const half = 50 - radius;
-      if (yawObject.position.x < -half || yawObject.position.x > half ||
-          yawObject.position.z < -half || yawObject.position.z > half) {
-        yawObject.position.copy(oldPos);
+      // collisions avec les bords
+      const limit = 49;
+      if (camera.position.x > limit || camera.position.x < -limit ||
+          camera.position.z > limit || camera.position.z < -limit) {
+        camera.position.copy(oldPos);
       }
 
       renderer.render(scene,camera);
