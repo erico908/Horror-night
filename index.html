@@ -20,19 +20,28 @@
       box-shadow:0 1px 4px rgba(0,0,0,0.6);
       transition: left 0.02s linear, top 0.02s linear;
     }
+    #sprintBtn {
+      position:absolute; bottom:40px; right:30px;
+      width:70px; height:70px; border-radius:50%;
+      background:rgba(255,0,0,0.3);
+      border:2px solid rgba(255,0,0,0.5);
+      touch-action:none;
+    }
   </style>
 </head>
 <body>
   <div id="joystick"><div id="stick"></div></div>
+  <div id="sprintBtn"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
   <script>
   // ---------- CONFIG ----------
-  const MAP_HALF = 80; // grande map
+  const MAP_HALF = 80;
   const CELL = 10;
   const PLAYER_HEIGHT = 1.6;
   const PLAYER_RADIUS = 0.5;
-  const BASE_WALK_SPEED = 2.5; // vitesse augmentée
+  const BASE_WALK_SPEED = 2.5;
+  const SPRINT_MULT = 1.8; // sprint = x1.8 plus vite
   const CAMERA_SENSITIVITY = 0.0035;
   const PITCH_LIMIT = Math.PI * 0.47;
   const JOY_MAX = 40, JOY_DEADZONE = 0.15;
@@ -77,7 +86,7 @@
   for (let x=-MAP_HALF+CELL/2; x<=MAP_HALF-CELL/2; x+=CELL){
     for (let z=-MAP_HALF+CELL/2; z<=MAP_HALF-CELL/2; z+=CELL){
       const isBorder = Math.abs(x)>MAP_HALF-CELL*1.5 || Math.abs(z)>MAP_HALF-CELL*1.5;
-      if(isBorder || Math.random()>0.82){ // densité des murs
+      if(isBorder || Math.random()>0.9){ // densité réduite
         const w = new THREE.Mesh(wallGeo, wallMat);
         w.position.set(x,1.5,z);
         scene.add(w); walls.push(w);
@@ -86,10 +95,10 @@
   }
 
   // lights
-  scene.add(new THREE.AmbientLight(0xffffe0,0.5));
-  for(let i=-60;i<=60;i+=30){
-    for(let j=-60;j<=60;j+=30){
-      const l=new THREE.PointLight(0xffffcc,0.7,25,2);
+  scene.add(new THREE.AmbientLight(0xffffe0,0.55));
+  for(let i=-60;i<=60;i+=40){
+    for(let j=-60;j<=60;j+=40){
+      const l=new THREE.PointLight(0xffffcc,0.7,22,2);
       l.position.set(i,2.8,j);
       scene.add(l);
     }
@@ -101,22 +110,24 @@
   const footstep = new THREE.Audio(listener);
   const loaderAudio = new THREE.AudioLoader();
   loaderAudio.load("https://cdn.pixabay.com/download/audio/2021/08/04/audio_b64f3a542a.mp3?filename=footstep-carpet-1-6553.mp3",
-    (buf)=>{ footstep.setBuffer(buf); footstep.setLoop(true); footstep.setVolume(0.4); });
+    (buf)=>{ footstep.setBuffer(buf); footstep.setLoop(true); footstep.setVolume(0.45); });
 
   // ---------- INPUT ----------
   let yaw=0, pitch=0;
   let moveX=0, moveZ=0;
   let joyTouchId=null, joyCenter={x:0,y:0}, joyActive=false;
+  let sprint=false;
 
   const joystick=document.getElementById("joystick");
   const stick=document.getElementById("stick");
+  const sprintBtn=document.getElementById("sprintBtn");
 
+  // joystick
   joystick.addEventListener("touchstart",e=>{
     const t=e.changedTouches[0]; joyTouchId=t.identifier; joyActive=true;
     const r=joystick.getBoundingClientRect();
     joyCenter={x:r.left+r.width/2,y:r.top+r.height/2};
   });
-
   joystick.addEventListener("touchmove",e=>{
     for(const t of e.changedTouches){
       if(t.identifier===joyTouchId && joyActive){
@@ -131,7 +142,6 @@
       }
     }
   });
-
   joystick.addEventListener("touchend",e=>{
     for(const t of e.changedTouches){
       if(t.identifier===joyTouchId){ joyActive=false; joyTouchId=null; moveX=0; moveZ=0;
@@ -139,11 +149,15 @@
     }
   });
 
+  // sprint button
+  sprintBtn.addEventListener("touchstart",()=>{ sprint=true; sprintBtn.style.background="rgba(255,0,0,0.6)"; });
+  sprintBtn.addEventListener("touchend",()=>{ sprint=false; sprintBtn.style.background="rgba(255,0,0,0.3)"; });
+
   // camera touch
   let camTouchId=null,lastX=0,lastY=0;
   document.addEventListener("touchstart",e=>{
     for(const t of e.changedTouches){
-      if(!t.target.closest("#joystick") && camTouchId===null){
+      if(!t.target.closest("#joystick") && !t.target.closest("#sprintBtn") && camTouchId===null){
         camTouchId=t.identifier; lastX=t.clientX; lastY=t.clientY;
       }
     }
@@ -172,10 +186,13 @@
     yawObject.rotation.y=yaw;
     yawObject.position.y=PLAYER_HEIGHT;
 
+    // vitesse dynamique
+    let speed=BASE_WALK_SPEED*(sprint?SPRINT_MULT:1);
+
     // déplacement
     const forward=new THREE.Vector3(0,0,-1).applyQuaternion(yawObject.quaternion).setY(0).normalize();
     const right=new THREE.Vector3(1,0,0).applyQuaternion(yawObject.quaternion).setY(0).normalize();
-    const deltaPos=forward.multiplyScalar(moveZ*BASE_WALK_SPEED*dt).add(right.multiplyScalar(moveX*BASE_WALK_SPEED*dt));
+    const deltaPos=forward.multiplyScalar(moveZ*speed*dt).add(right.multiplyScalar(moveX*speed*dt));
 
     const oldPos=yawObject.position.clone();
     yawObject.position.add(deltaPos);
@@ -184,15 +201,17 @@
     const bound=MAP_HALF-PLAYER_RADIUS-0.1;
     if(Math.abs(yawObject.position.x)>bound||Math.abs(yawObject.position.z)>bound){yawObject.position.copy(oldPos);}
     for(const w of walls){
-      const dx=Math.abs(yawObject.position.x-w.position.x);
-      const dz=Math.abs(yawObject.position.z-w.position.z);
-      if(dx<CELL/2+PLAYER_RADIUS && dz<CELL/2+PLAYER_RADIUS){yawObject.position.copy(oldPos);break;}
+      if(Math.abs(yawObject.position.x-w.position.x)<CELL/2+PLAYER_RADIUS &&
+         Math.abs(yawObject.position.z-w.position.z)<CELL/2+PLAYER_RADIUS){
+        yawObject.position.copy(oldPos); break;
+      }
     }
 
-    // gestion son pas
+    // sons de pas
     const walking=(Math.abs(moveX)>0.01||Math.abs(moveZ)>0.01);
     if(walking){
       if(!footstep.isPlaying) footstep.play();
+      footstep.setPlaybackRate(sprint?1.6:1.0); // + rapide quand sprint
     }else{
       if(footstep.isPlaying) footstep.pause();
     }
@@ -209,6 +228,7 @@
   </script>
 </body>
 </html>
+
 
 
 
