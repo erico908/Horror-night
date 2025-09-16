@@ -30,6 +30,7 @@
     renderer.setSize(innerWidth, innerHeight);
     document.body.appendChild(renderer.domElement);
 
+    // Position fixe de la "tête"
     camera.position.set(0, 1.6, 0);
 
     // ---------- TEXTURES ----------
@@ -139,6 +140,8 @@
         lastX=e.touches[0].clientX; lastY=e.touches[0].clientY;
         yaw -= dx*0.002;
         pitch -= dy*0.002;
+
+        // limite du regard vertical (comme un vrai FPS)
         const limit=Math.PI/2.5;
         pitch=Math.max(-limit,Math.min(limit,pitch));
       }
@@ -155,11 +158,16 @@
     function animate(){
       requestAnimationFrame(animate);
       const delta=clock.getDelta();
-      const speed=1.5*delta;
+
+      // vitesse réduite de moitié
+      const speed=0.75*delta;
 
       // rotation caméra
       camera.rotation.x=pitch;
       camera.rotation.y=yaw;
+
+      // garde la hauteur fixe de la "tête"
+      camera.position.y = 1.6;
 
       // sauvegarde position
       const oldPos=camera.position.clone();
@@ -168,9 +176,9 @@
       const forward=new THREE.Vector3(Math.sin(yaw),0,Math.cos(yaw));
       const right=new THREE.Vector3().crossVectors(forward,new THREE.Vector3(0,1,0)).normalize();
 
-      // déplacement fluide (fix gauche/droite inversés)
-      camera.position.addScaledVector(forward, moveZ*speed*3);
-      camera.position.addScaledVector(right, -moveX*speed*3);
+      // déplacement fluide (même vitesse partout)
+      camera.position.addScaledVector(forward, moveZ * speed * 2);
+      camera.position.addScaledVector(right, -moveX * speed * 2);
 
       // collisions
       const radius=0.5;
