@@ -2,7 +2,7 @@
 <html lang="fr">
   <head>
     <meta charset="UTF-8" />
-    <title>Backrooms avec Néons</title>
+    <title>Backrooms Horreur</title>
     <style>
       body {
         margin: 0;
@@ -43,7 +43,7 @@
     </style>
   </head>
   <body>
-    <div id="hud">Backrooms : Néons clignotants</div>
+    <div id="hud">Backrooms : lampe torche + son + collisions</div>
     <div id="joystick"><div id="stick"></div></div>
 
     <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
@@ -58,17 +58,40 @@
       renderer.setSize(window.innerWidth, window.innerHeight);
       document.body.appendChild(renderer.domElement);
 
-      const ambient = new THREE.AmbientLight(0xffffff, 0.2);
+      // ---------------- LIGHTS ----------------
+      const ambient = new THREE.AmbientLight(0xffffff, 0.15);
       scene.add(ambient);
+
+      // Lampe torche (SpotLight attachée à la caméra)
+      const torch = new THREE.SpotLight(0xffffff, 2, 20, Math.PI/6, 0.3, 1);
+      torch.position.set(0, 0, 0);
+      torch.target.position.set(0, 0, -1);
+      camera.add(torch);
+      camera.add(torch.target);
+      scene.add(camera);
+
+      // ---------------- AUDIO ----------------
+      const listener = new THREE.AudioListener();
+      camera.add(listener);
+
+      const sound = new THREE.Audio(listener);
+      const audioLoader = new THREE.AudioLoader();
+      audioLoader.load(
+        "https://cdn.pixabay.com/download/audio/2021/09/13/audio_bf19c9c6d7.mp3?filename=neon-light-buzz-6407.mp3",
+        (buffer) => {
+          sound.setBuffer(buffer);
+          sound.setLoop(true);
+          sound.setVolume(0.3);
+          sound.play();
+        }
+      );
 
       // ---------------- MAP ----------------
       const MAP_W = 40, MAP_H = 40, CELL = 4;
-
       const loader = new THREE.TextureLoader();
 
       const wallTex = loader.load("https://ambientcg.com/get?file=Wallpaper001_1K-JPG_Color.jpg");
       wallTex.wrapS = wallTex.wrapT = THREE.RepeatWrapping;
-      wallTex.repeat.set(1,1);
 
       const floorTex = loader.load("https://ambientcg.com/get?file=Carpet006_1K-JPG_Color.jpg");
       floorTex.wrapS = floorTex.wrapT = THREE.RepeatWrapping;
@@ -82,18 +105,19 @@
       const floorMat = new THREE.MeshStandardMaterial({ map: floorTex });
       const ceilMat = new THREE.MeshStandardMaterial({ map: ceilTex });
 
+      const walls = [];
       const wallGeo = new THREE.BoxGeometry(CELL, 3, CELL);
-      const walls = new THREE.Group();
+
       for (let y = 0; y < MAP_H; y++) {
         for (let x = 0; x < MAP_W; x++) {
           if (Math.random() < 0.3 || x === 0 || y === 0 || x === MAP_W-1 || y === MAP_H-1) {
             const wall = new THREE.Mesh(wallGeo, wallMat);
             wall.position.set((x - MAP_W/2) * CELL, 1.5, (y - MAP_H/2) * CELL);
-            walls.add(wall);
+            scene.add(wall);
+            walls.push(wall);
           }
         }
       }
-      scene.add(walls);
 
       const floorGeo = new THREE.PlaneGeometry(MAP_W * CELL, MAP_H * CELL);
       const floor = new THREE.Mesh(floorGeo, floorMat);
@@ -106,26 +130,7 @@
       ceiling.position.y = 3;
       scene.add(ceiling);
 
-      // ---------------- NEONS ----------------
-      const neonLights = [];
-      const neonMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-      const neonGeo = new THREE.CylinderGeometry(0.05, 0.05, 1.2, 8);
-
-      for (let x = -MAP_W/2; x < MAP_W/2; x += 6) {
-        for (let z = -MAP_H/2; z < MAP_H/2; z += 6) {
-          const light = new THREE.PointLight(0xffffff, 1.5, 10, 2);
-          light.position.set(x*CELL, 2.9, z*CELL);
-          scene.add(light);
-          neonLights.push(light);
-
-          const tube = new THREE.Mesh(neonGeo, neonMat);
-          tube.rotation.z = Math.PI/2;
-          tube.position.copy(light.position);
-          scene.add(tube);
-        }
-      }
-
-      // ---------------- CONTROLS ----------------
+      // ---------------- JOYSTICK & CAMERA ----------------
       let yaw = 0, pitch = 0;
       let moveX = 0, moveZ = 0;
 
@@ -183,22 +188,32 @@
       function animate() {
         requestAnimationFrame(animate);
         const delta = clock.getDelta();
-        const t = clock.elapsedTime;
+        const speed = 5 * delta;
 
-        // camera
+        // rotation
         camera.rotation.x = pitch;
         camera.rotation.y = yaw;
 
-        const speed = 5 * delta;
+        // sauvegarde position avant déplacement
+        const oldPos = camera.position.clone();
+
+        // direction
         const forward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
         const right = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0,1,0)).normalize();
+
+        // déplacement
         camera.position.addScaledVector(forward, -moveZ * speed * 5);
         camera.position.addScaledVector(right, moveX * speed * 5);
 
-        // neon flicker
-        neonLights.forEach((light, i) => {
-          light.intensity = 1.2 + 0.3 * Math.sin(t * 8 + i);
-        });
+        // COLLISIONS : si trop proche d'un mur → retour en arrière
+        const playerRadius = 0.5;
+        for (const wall of walls) {
+          const dist = wall.position.distanceTo(camera.position);
+          if (dist < CELL/2 + playerRadius) {
+            camera.position.copy(oldPos);
+            break;
+          }
+        }
 
         renderer.render(scene, camera);
       }
@@ -212,6 +227,7 @@
     </script>
   </body>
 </html>
+
 
 
 
