@@ -30,7 +30,8 @@
     renderer.setSize(innerWidth, innerHeight);
     document.body.appendChild(renderer.domElement);
 
-    camera.position.set(0, 1.6, 0); // tête du joueur
+    // Position fixe de la "tête"
+    camera.position.set(0, 1.6, 0);
 
     // ---------- TEXTURES ----------
     const loader = new THREE.TextureLoader();
@@ -154,8 +155,8 @@
           const dx=t.clientX-lastX;
           const dy=t.clientY-lastY;
           lastX=t.clientX; lastY=t.clientY;
-          yaw -= dx*0.003;   // sensibilité augmentée
-          pitch -= dy*0.003;
+          yaw -= dx*0.002;
+          pitch -= dy*0.002;
 
           // limite du regard vertical (-85° à +85°)
           const limit = Math.PI/2.1;
@@ -194,11 +195,11 @@
       const forward=new THREE.Vector3(Math.sin(yaw),0,Math.cos(yaw));
       const right=new THREE.Vector3().crossVectors(forward,new THREE.Vector3(0,1,0)).normalize();
 
-      // déplacement fluide
+      // déplacement fluide (même vitesse partout)
       camera.position.addScaledVector(forward, moveZ * speed * 2);
       camera.position.addScaledVector(right, -moveX * speed * 2);
 
-      // collisions avec murs
+      // collisions
       const radius=0.5;
       for(const wall of walls){
         const dx=Math.abs(camera.position.x-wall.position.x);
@@ -207,13 +208,6 @@
           camera.position.copy(oldPos);
           break;
         }
-      }
-
-      // collisions avec bords de la map
-      const border=49;
-      if (camera.position.x > border || camera.position.x < -border ||
-          camera.position.z > border || camera.position.z < -border) {
-        camera.position.copy(oldPos);
       }
 
       renderer.render(scene,camera);
@@ -229,6 +223,11 @@
   </script>
 </body>
 </html>
+
+
+
+
+
 
 
 
