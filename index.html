@@ -25,7 +25,7 @@
   <script>
     // ---------- SCENE ----------
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 1000);
+    const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 2000);
     const renderer = new THREE.WebGLRenderer({antialias:true});
     renderer.setSize(innerWidth, innerHeight);
     document.body.appendChild(renderer.domElement);
@@ -36,19 +36,19 @@
     const loader = new THREE.TextureLoader();
     const texFloor = loader.load("https://ambientcg.com/get?file=Carpet006_1K_Color.jpg");
     texFloor.wrapS = texFloor.wrapT = THREE.RepeatWrapping;
-    texFloor.repeat.set(20,20);
+    texFloor.repeat.set(80,80); // sol répété plus souvent
 
     const texWall = loader.load("https://ambientcg.com/get?file=Wallpaper001_1K_Color.jpg");
     texWall.wrapS = texWall.wrapT = THREE.RepeatWrapping;
-    texWall.repeat.set(10,4);
+    texWall.repeat.set(40,6);
 
     const texCeil = loader.load("https://ambientcg.com/get?file=CeilingTile001_1K_Color.jpg");
     texCeil.wrapS = texCeil.wrapT = THREE.RepeatWrapping;
-    texCeil.repeat.set(20,20);
+    texCeil.repeat.set(80,80);
 
     // Sol
     const floor = new THREE.Mesh(
-      new THREE.PlaneGeometry(100,100),
+      new THREE.PlaneGeometry(400,400),
       new THREE.MeshStandardMaterial({map: texFloor})
     );
     floor.rotation.x = -Math.PI/2;
@@ -56,7 +56,7 @@
 
     // Plafond
     const ceil = new THREE.Mesh(
-      new THREE.PlaneGeometry(100,100),
+      new THREE.PlaneGeometry(400,400),
       new THREE.MeshStandardMaterial({map: texCeil})
     );
     ceil.rotation.x = Math.PI/2;
@@ -66,8 +66,8 @@
     // ---------- MURS ----------
     const walls = [];
     const CELL = 10;
-    for (let x=-50; x<=50; x+=CELL) {
-      for (let z=-50; z<=50; z+=CELL) {
+    for (let x=-200; x<=200; x+=CELL) {
+      for (let z=-200; z<=200; z+=CELL) {
         if (Math.random() > 0.75) {
           const wall = new THREE.Mesh(
             new THREE.BoxGeometry(CELL,3,CELL),
@@ -82,9 +82,9 @@
 
     // ---------- LUMIÈRES (néons uniformes) ----------
     scene.add(new THREE.AmbientLight(0xffffe0, 0.6));
-    for (let i=-40; i<=40; i+=20) {
-      for (let j=-40; j<=40; j+=20) {
-        const light = new THREE.PointLight(0xffffcc, 0.8, 30);
+    for (let i=-200; i<=200; i+=40) {
+      for (let j=-200; j<=200; j+=40) {
+        const light = new THREE.PointLight(0xffffcc, 0.7, 50);
         light.position.set(i, 2.9, j);
         scene.add(light);
       }
@@ -117,7 +117,6 @@
       stick.style.left=35+dist*Math.cos(ang)-15+"px";
       stick.style.top=35+dist*Math.sin(ang)-15+"px";
 
-      // Normalisation (-1 à 1)
       moveX = dx / maxDist;
       moveZ = dy / maxDist;
     });
