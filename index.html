@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
   <meta charset="utf-8" />
-  <title>Backrooms - Grande Map (Couleurs)</title>
+  <title>Backrooms Optimisé</title>
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
   <style>
     html,body{height:100%;margin:0;background:#000;overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none}
@@ -18,11 +18,11 @@
   <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
   <script>
   /* ---------------- CONFIG ---------------- */
-  const MAP_SIZE = 500;        // taille totale
-  const CELL_SIZE = 10;        // taille d'une case
-  const WALL_PROB = 0.3;       // densité de murs
-  const WALK_SPEED = 1.5;      // vitesse réaliste
-  const PLAYER_RADIUS = 0.5;   // rayon de collision
+  const MAP_SIZE = 500;        
+  const CELL_SIZE = 10;        
+  const WALL_PROB = 0.3;       
+  const WALK_SPEED = 1.0;      // vitesse fixée à 1 m/s
+  const PLAYER_RADIUS = 0.5;   
 
   /* ---------------- THREE SETUP ---------------- */
   const scene = new THREE.Scene();
@@ -36,10 +36,27 @@
   /* ---------------- LIGHTING ---------------- */
   scene.add(new THREE.AmbientLight(0xffffff, 1.2));
 
-  /* ---------------- MATERIALS ---------------- */
-  const floorMat = new THREE.MeshStandardMaterial({ color: 0xffffcc });
-  const ceilMat  = new THREE.MeshStandardMaterial({ color: 0xffffff });
-  const wallMat  = new THREE.MeshStandardMaterial({ color: 0xe6e6b8 });
+  /* ---------------- TEXTURES (optimisées petites images) ---------------- */
+  const loader = new THREE.TextureLoader();
+
+  // Sol : jaune foncé
+  const texFloor = loader.load("https://i.ibb.co/fFZ0xY7/darkyellow.jpg");
+  texFloor.wrapS = texFloor.wrapT = THREE.RepeatWrapping;
+  texFloor.repeat.set(50,50);
+
+  // Plafond : jaune clair
+  const texCeil = loader.load("https://i.ibb.co/hZHLFWY/lightyellow.jpg");
+  texCeil.wrapS = texCeil.wrapT = THREE.RepeatWrapping;
+  texCeil.repeat.set(50,50);
+
+  // Murs : jaune normal
+  const texWall = loader.load("https://i.ibb.co/M7hV4rp/midyellow.jpg");
+  texWall.wrapS = texWall.wrapT = THREE.RepeatWrapping;
+  texWall.repeat.set(2,2);
+
+  const floorMat = new THREE.MeshStandardMaterial({ map: texFloor });
+  const ceilMat  = new THREE.MeshStandardMaterial({ map: texCeil });
+  const wallMat  = new THREE.MeshStandardMaterial({ map: texWall });
 
   /* ---------------- FLOOR & CEILING ---------------- */
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(MAP_SIZE, MAP_SIZE), floorMat);
@@ -90,7 +107,7 @@
     const ang=Math.atan2(dy,dx);
     const sx=Math.cos(ang)*dist, sy=Math.sin(ang)*dist;
     stick.style.transform=`translate(${sx}px,${sy}px)`;
-    moveX=sx/max; moveZ=sy/max;
+    moveX=sx/max; moveZ=-sy/max; // inversion corrigée
   });
 
   /* ---------------- CAMERA CONTROL ---------------- */
@@ -132,7 +149,7 @@
     const forward=new THREE.Vector3(Math.sin(yaw),0,Math.cos(yaw));
     const right=new THREE.Vector3(forward.z,0,-forward.x);
     let move=new THREE.Vector3();
-    move.addScaledVector(forward,-moveZ);
+    move.addScaledVector(forward,moveZ); // corrigé
     move.addScaledVector(right,moveX);
     if(move.lengthSq()>0)move.normalize();
 
