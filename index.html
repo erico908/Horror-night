@@ -80,7 +80,7 @@
       }
     }
 
-    // ---------- LUMIÈRES (néons) ----------
+    // ---------- LUMIÈRES ----------
     scene.add(new THREE.AmbientLight(0xffffe0, 0.6));
     for (let i=-40; i<=40; i+=20) {
       for (let j=-40; j<=40; j+=20) {
@@ -101,12 +101,14 @@
       joyActive = true;
       const r = joystick.getBoundingClientRect();
       joyCenter = {x: r.left+r.width/2, y:r.top+r.height/2};
-    });
+    }, {passive:false});
+
     joystick.addEventListener("touchend", ()=>{
       joyActive=false;
       stick.style.left="35px"; stick.style.top="35px";
       moveX=moveZ=0;
     });
+
     joystick.addEventListener("touchmove", e=>{
       if(!joyActive) return;
       const t=e.touches[0];
@@ -120,7 +122,7 @@
       // Normalisation (-1 à 1)
       moveX = dx / maxDist;
       moveZ = dy / maxDist;
-    });
+    }, {passive:false});
 
     // ---------- CAMERA SWIPE ----------
     let lastX=null,lastY=null;
@@ -128,7 +130,8 @@
       if(!e.target.closest("#joystick")) {
         lastX=e.touches[0].clientX; lastY=e.touches[0].clientY;
       }
-    });
+    }, {passive:false});
+
     document.addEventListener("touchmove", e=>{
       if(!e.target.closest("#joystick") && lastX!==null){
         const dx=e.touches[0].clientX-lastX;
@@ -139,8 +142,13 @@
         const limit=Math.PI/2.5;
         pitch=Math.max(-limit,Math.min(limit,pitch));
       }
+    }, {passive:false});
+
+    document.addEventListener("touchend", e=>{
+      if(!e.target.closest("#joystick")) {
+        lastX=null; lastY=null;
+      }
     });
-    document.addEventListener("touchend", ()=>{lastX=null;lastY=null;});
 
     // ---------- GAME LOOP ----------
     const clock=new THREE.Clock();
@@ -160,9 +168,9 @@
       const forward=new THREE.Vector3(Math.sin(yaw),0,Math.cos(yaw));
       const right=new THREE.Vector3().crossVectors(forward,new THREE.Vector3(0,1,0)).normalize();
 
-      // déplacement fluide (FIX joystick inversé)
+      // déplacement fluide (fix gauche/droite inversés)
       camera.position.addScaledVector(forward, moveZ*speed*3);
-      camera.position.addScaledVector(right, moveX*speed*3);
+      camera.position.addScaledVector(right, -moveX*speed*3);
 
       // collisions
       const radius=0.5;
@@ -187,6 +195,7 @@
   </script>
 </body>
 </html>
+
 
 
 
