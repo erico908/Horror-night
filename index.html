@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
   <meta charset="utf-8" />
-  <title>Backrooms FPS + Shrek Monster</title>
+  <title>Backrooms FPS + Shrek Monster + Spotlight</title>
   <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no" />
   <style>
     html,body{height:100%;margin:0;background:#000;overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none}
@@ -22,141 +22,211 @@
   <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/loaders/GLTFLoader.js"></script>
 
   <script>
-  // (tout ton code d’avant jusqu’à la partie “MONSTER IA”) …
+  // ---------------- CONFIG ----------------
+  const MAP_HALF = 80;
+  const CELL = 10;
+  const PLAYER_HEIGHT = 1.6;
+  const PLAYER_RADIUS = 0.5;
+  const BASE_WALK_SPEED = 2.5;
+  const SPRINT_MULT = 2.0;
+  const CAMERA_SENSITIVITY = 0.0035;
+  const PITCH_LIMIT = Math.PI * 0.47;
+  const JOY_MAX = 60, JOY_DEADZONE = 0.15;
 
-  // ---------------- MONSTER remplacé par Shrek avec animation ----------------
-  let monster; 
-  let mixer; 
-  let shrekLoaded = false;
+  const MONSTER_ON_DURATION = 60.0;
+  const MONSTER_OFF_DURATION = 60.0;
+  const MONSTER_SPEED = (BASE_WALK_SPEED * SPRINT_MULT) * 0.95;
+  const MONSTER_SPAWN_BEHIND_DIST = 10.0;
+  const MONSTER_MIN_SPAWN_DIST = 8.0;
+  const MONSTER_MAX_SPAWN_DIST = 40.0;
+  const MONSTER_GROWL_DIST = 8.0;
 
-  const gltfLoader = new THREE.GLTFLoader();
-  // Remplace ce lien par le lien vers ton fichier .glb/ .gltf de Shrek riggé
-  gltfLoader.load("shrek_rig.glb", (gltf) => {
-    monster = gltf.scene;
-    monster.scale.set(1.5, 1.5, 1.5); // ajuster la taille
-    monster.visible = false;
-    scene.add(monster);
+  // ---------------- THREE SETUP ----------------
+  const scene = new THREE.Scene();
+  scene.fog = new THREE.FogExp2(0xe6e6d8, 0.004);
 
-    mixer = new THREE.AnimationMixer(monster);
-    if (gltf.animations && gltf.animations.length > 0) {
-      const walkAction = mixer.clipAction(gltf.animations[0]);
-      walkAction.play();
+  const renderer = new THREE.WebGLRenderer({antialias:true});
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.setClearColor(0x000000, 1);
+  document.body.appendChild(renderer.domElement);
+
+  const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 1000);
+  camera.rotation.order = 'YXZ';
+  const yawObject = new THREE.Object3D();
+  const pitchObject = new THREE.Object3D();
+  yawObject.add(pitchObject);
+  pitchObject.add(camera);
+  yawObject.position.set(0, PLAYER_HEIGHT, 0);
+  scene.add(yawObject);
+
+  const playerSpot = new THREE.SpotLight(0xffffff, 1.8, 40, Math.PI/6, 0.25, 1);
+  playerSpot.castShadow = false;
+  camera.add(playerSpot);
+  camera.add(playerSpot.target);
+  playerSpot.position.set(0, 0, 0);
+  playerSpot.target.position.set(0, 0, -1);
+
+  // ---------------- TEXTURES ----------------
+  const loader = new THREE.TextureLoader();
+  const texFloor = loader.load("https://ambientcg.com/get?file=Carpet006_1K_Color.jpg", (t)=>{ t.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy()); });
+  texFloor.wrapS = texFloor.wrapT = THREE.RepeatWrapping; texFloor.repeat.set(60,60);
+  const texWall = loader.load("https://ambientcg.com/get?file=Wallpaper001_1K_Color.jpg"); texWall.wrapS = texWall.wrapT = THREE.RepeatWrapping; texWall.repeat.set(4,2);
+  const texCeil = loader.load("https://ambientcg.com/get?file=CeilingTile001_1K_Color.jpg"); texCeil.wrapS = texCeil.wrapT = THREE.RepeatWrapping; texCeil.repeat.set(60,60);
+
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(MAP_HALF*2, MAP_HALF*2), new THREE.MeshStandardMaterial({map:texFloor}));
+  floor.rotation.x = -Math.PI/2; scene.add(floor);
+  const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(MAP_HALF*2, MAP_HALF*2), new THREE.MeshStandardMaterial({map:texCeil}));
+  ceiling.position.y = 3; ceiling.rotation.x = Math.PI/2; scene.add(ceiling);
+
+  // ---------------- WALLS ----------------
+  const wallPositions = [];
+  const wallGeo = new THREE.BoxGeometry(CELL,3,CELL);
+  const wallMat = new THREE.MeshStandardMaterial({map:texWall});
+  for (let x = -MAP_HALF + CELL/2; x <= MAP_HALF - CELL/2; x += CELL) {
+    for (let z = -MAP_HALF + CELL/2; z <= MAP_HALF - CELL/2; z += CELL) {
+      const isBorder = Math.abs(x) > MAP_HALF - CELL*1.5 || Math.abs(z) > MAP_HALF - CELL*1.5;
+      if (isBorder || Math.random() > 0.82) wallPositions.push({x:x,z:z});
     }
-    shrekLoaded = true;
-  }, undefined, (error) => {
-    console.error("Erreur chargement Shrek:", error);
+  }
+  const instancedWalls = new THREE.InstancedMesh(wallGeo, wallMat, wallPositions.length);
+  const tmp = new THREE.Object3D();
+  for (let i=0;i<wallPositions.length;i++){tmp.position.set(wallPositions[i].x,1.5,wallPositions[i].z); tmp.updateMatrix(); instancedWalls.setMatrixAt(i,tmp.matrix);}
+  scene.add(instancedWalls); instancedWalls.instanceMatrix.needsUpdate = true;
+
+  // ---------------- LIGHTS ----------------
+  scene.add(new THREE.AmbientLight(0xffffe0, 0.45));
+  const neonLights = [];
+  for (let i=-60;i<=60;i+=30){for(let j=-60;j<=60;j+=30){const l = new THREE.PointLight(0xffffcc,0.65,22,2.2); l.position.set(i,2.8,j); scene.add(l); neonLights.push(l);}}
+  function updateNeonFlicker(t){neonLights.forEach((l,idx)=>{const base=0.7+Math.sin(t*3.0+idx)*0.05;const spike=(Math.random()>0.997)?1.6:1.0;l.intensity=base*spike;});}
+
+  // ---------------- AUDIO ----------------
+  const listener = new THREE.AudioListener(); camera.add(listener);
+  const footstep = new THREE.Audio(listener);
+  const loaderAudio = new THREE.AudioLoader();
+  loaderAudio.load("https://cdn.pixabay.com/download/audio/2021/08/04/audio_b64f3a542a.mp3?filename=footstep-carpet-1-6553.mp3",(buf)=>{footstep.setBuffer(buf);footstep.setLoop(true);footstep.setVolume(0.45);});
+  const growl = new THREE.Audio(listener);
+  loaderAudio.load("https://cdn.pixabay.com/download/audio/2021/08/04/audio_4b64b0fcd2.mp3?filename=neon-light-hum-14213.mp3",(buf)=>{growl.setBuffer(buf);growl.setLoop(true);growl.setVolume(0.45);});
+  const scream = new THREE.Audio(listener);
+  loaderAudio.load("https://cdn.pixabay.com/download/audio/2021/08/04/audio_9e3d2f4f9b.mp3?filename=terror-scream-6327.mp3",(buf)=>{scream.setBuffer(buf);scream.setLoop(false);scream.setVolume(0.9);});
+
+  // ---------------- INPUT & UI ----------------
+  const joystick = document.getElementById('joystick');
+  const stick = document.getElementById('stick');
+  const sprintBtn = document.getElementById('sprintBtn');
+  const gameOverDiv = document.getElementById('gameOver');
+  const restartBtn = document.getElementById('restartBtn');
+
+  let yaw=0, pitch=0, moveX=0, moveZ=0, joyTouchId=null, joyCenter={x:0,y:0}, joyActive=false;
+  let camTouchId=null,lastCamX=0,lastCamY=0,isSprinting=false,gameOver=false;
+  const keys = {};
+  window.addEventListener('keydown',e=>keys[e.code]=true); window.addEventListener('keyup',e=>keys[e.code]=false);
+  restartBtn.addEventListener('click',()=>location.reload());
+  
+  // ---------- MONSTER ----------
+  const monster = new THREE.Mesh(new THREE.BoxGeometry(1,2,1), new THREE.MeshStandardMaterial({color:0x220000,emissive:0x440000,roughness:0.6,metalness:0}));
+  monster.visible=false; scene.add(monster);
+  let monsterState='off',monsterTimer=0,monsterGrowlPlaying=false,gameOverFlag=false;
+  
+  // ---------- Remplacer cube par Shrek -----------
+  let monsterMixer = null;
+  const gltfLoader = new THREE.GLTFLoader();
+  gltfLoader.load('shrek_walk_cycle.glb', function(gltf){
+      const model = gltf.scene;
+      model.scale.set(0.5,0.5,0.5);
+      monster.add(model);
+      monsterMixer = new THREE.AnimationMixer(model);
+      gltf.animations.forEach(clip=>monsterMixer.clipAction(clip).play());
   });
 
-  // Adaptation de spawn / updateMonster
+  function collidesWithWalls(x,z){for(let i=0;i<wallPositions.length;i++){const p=wallPositions[i];if(Math.abs(x-p.x)<CELL/2+PLAYER_RADIUS && Math.abs(z-p.z)<CELL/2+PLAYER_RADIUS) return true;}return false;}
 
-  function spawnMonsterBehindPlayer() {
-    if (!monster) return;
+  function spawnMonsterBehindPlayer(){
     const playerPos = yawObject.position.clone();
     const forward = new THREE.Vector3(0,0,-1).applyQuaternion(yawObject.quaternion).setY(0).normalize();
     const target = playerPos.clone().sub(forward.clone().multiplyScalar(MONSTER_SPAWN_BEHIND_DIST));
-    const bound = MAP_HALF - 2.0;
-    if (Math.abs(target.x) <= bound && Math.abs(target.z) <= bound && !collidesWithWalls(target.x, target.z)) {
-      monster.position.set(target.x, 1.0, target.z);
-    } else {
-      // fallback random spawn (ton code déjà existant)
-      for (let attempt=0; attempt<40; attempt++) {
-        const angle = Math.random() * Math.PI*2;
-        const dist = MONSTER_MIN_SPAWN_DIST + Math.random() * (MONSTER_MAX_SPAWN_DIST - MONSTER_MIN_SPAWN_DIST);
-        const x = playerPos.x + Math.cos(angle)*dist;
-        const z = playerPos.z + Math.sin(angle)*dist;
-        if (Math.abs(x) > MAP_HALF-2 || Math.abs(z) > MAP_HALF-2) continue;
-        if (!collidesWithWalls(x, z)) {
-          monster.position.set(x, 1.0, z);
-          return;
-        }
-      }
-      monster.position.set(target.x, 1.0, target.z);
-    }
+    const bound = MAP_HALF-2.0;
+    if(Math.abs(target.x)<=bound && Math.abs(target.z)<=bound && !collidesWithWalls(target.x,target.z)){monster.position.set(target.x,1.0,target.z); return true;}
+    for(let deg=-60;deg<=60;deg+=15){const ang = Math.atan2(-forward.z,-forward.x)+deg*Math.PI/180.0; const tx=playerPos.x+Math.cos(ang)*MONSTER_SPAWN_BEHIND_DIST; const tz=playerPos.z+Math.sin(ang)*MONSTER_SPAWN_BEHIND_DIST; if(Math.abs(tx)<=bound && Math.abs(tz)<=bound && !collidesWithWalls(tx,tz)){monster.position.set(tx,1.0,tz); return true;}}
+    for(let attempt=0;attempt<40;attempt++){const angle=Math.random()*Math.PI*2; const dist=MONSTER_MIN_SPAWN_DIST+Math.random()*(MONSTER_MAX_SPAWN_DIST-MONSTER_MIN_SPAWN_DIST); const x=playerPos.x+Math.cos(angle)*dist; const z=playerPos.z+Math.sin(angle)*dist; if(Math.abs(x)>MAP_HALF-2 || Math.abs(z)>MAP_HALF-2) continue; if(!collidesWithWalls(x,z)){monster.position.set(x,1.0,z); return true;}}
+    monster.position.set(target.x,1.0,target.z); return false;
   }
 
-  function updateMonster(dt) {
-    if (!shrekLoaded) return;  // ne fait rien tant que Shrek pas chargé
-    // ton code existant de gestion ON/OFF …
-    if (monsterState === 'on') {
-      // poursuivre joueur
-      const target = new THREE.Vector3(yawObject.position.x, monster.position.y, yawObject.position.z);
-      const dir = new THREE.Vector3().subVectors(target, monster.position);
-      dir.y = 0;
-      const distToPlayer = dir.length();
-      if (distToPlayer > 0.001) dir.normalize();
+  function triggerGameOver(){if(gameOverFlag)return; gameOverFlag=true; gameOverDiv.style.display='flex'; try{footstep.pause();}catch(e){} try{growl.stop();}catch(e){} try{scream.play();}catch(e){}}
 
-      const step = Math.min(MONSTER_SPEED * dt, distToPlayer);
+  function updateMonster(dt){
+    if(gameOverFlag)return;
+    monsterTimer+=dt;
+    if(monsterState==='off'){if(monsterTimer>=MONSTER_OFF_DURATION){monsterState='on';monsterTimer=0; monster.visible=true; monsterGrowlPlaying=false; spawnMonsterBehindPlayer(); monster.scale.set(1,1,1);}}
+    else{
+      if(monsterTimer>=MONSTER_ON_DURATION){monsterState='off';monsterTimer=0; monster.visible=false; if(growl.isPlaying) growl.stop(); monsterGrowlPlaying=false; return;}
+      const target = new THREE.Vector3(yawObject.position.x,monster.position.y,yawObject.position.z);
+      const dir = new THREE.Vector3().subVectors(target,monster.position); dir.y=0; const distToPlayer=dir.length(); if(distToPlayer>0.001) dir.normalize();
+      const step = Math.min(MONSTER_SPEED*dt, distToPlayer);
       let nextPos = monster.position.clone().add(dir.clone().multiplyScalar(step));
-
       let collision = false;
-      if (collidesWithWalls(nextPos.x, nextPos.z)) collision = true;
-      const bound = MAP_HALF - 1.0;
-      if (nextPos.x < -bound || nextPos.x > bound || nextPos.z < -bound || nextPos.z > bound) collision = true;
-
-      if (collision) {
-        const perp = new THREE.Vector3(-dir.z, 0, dir.x);
-        let moved = false;
-        for (let s = 0; s < 2; s++) {
-          const sign = s === 0 ? 1 : -1;
-          const alt = monster.position.clone()
-            .add(dir.clone().multiplyScalar(step * 0.9))
-            .add(perp.clone().multiplyScalar(sign * step * 0.9));
-          if (!collidesWithWalls(alt.x, alt.z) 
-              && Math.abs(alt.x) <= bound && Math.abs(alt.z) <= bound) {
-            nextPos = alt;
-            moved = true;
-            break;
-          }
-        }
-        if (!moved) {
-          nextPos = monster.position.clone();
-        }
-      }
-
+      if(collidesWithWalls(nextPos.x,nextPos.z)) collision=true;
+      const bound=MAP_HALF-1.0; if(nextPos.x<-bound || nextPos.x>bound || nextPos.z<-bound || nextPos.z>bound) collision=true;
+      if(collision){const perp = new THREE.Vector3(-dir.z,0,dir.x); let moved=false; for(let s=0;s<2;s++){const sign=s===0?1:-1; const alt = monster.position.clone().add(dir.clone().multiplyScalar(step*0.9)).add(perp.clone().multiplyScalar(sign*step*0.9)); if(!collidesWithWalls(alt.x,alt.z) && Math.abs(alt.x)<=bound && Math.abs(alt.z)<=bound){nextPos=alt; moved=true; break;}} if(!moved) nextPos=monster.position.clone();}
       monster.position.copy(nextPos);
-
-      const lookDir = new THREE.Vector3(yawObject.position.x - monster.position.x, 0, yawObject.position.z - monster.position.z);
-      if (lookDir.lengthSq() > 0.001) {
-        monster.rotation.y = Math.atan2(lookDir.x, lookDir.z);
-      }
-
-      const bob = Math.sin(performance.now() * 0.002) * 0.12;
-      monster.position.y = 1.0 + bob;
-
-      if (distToPlayer < MONSTER_GROWL_DIST) {
-        if (!monsterGrowlPlaying && growl.isBuffer) {
-          growl.play();
-          monsterGrowlPlaying = true;
-        }
-      } else {
-        if (monsterGrowlPlaying && growl.isPlaying) {
-          growl.stop();
-          monsterGrowlPlaying = false;
-        }
-      }
-
-      if (distToPlayer < 1.5) {
-        triggerGameOver();
-      }
+      const lookDir = new THREE.Vector3(yawObject.position.x-monster.position.x,0,yawObject.position.z-monster.position.z);
+      if(lookDir.lengthSq()>0.001) monster.rotation.y=Math.atan2(lookDir.x,lookDir.z);
+      const bob = Math.sin(performance.now()*0.002)*0.12; monster.position.y = 1.0 + bob;
+      if(distToPlayer<6.0){const s=1.0+(6.0-distToPlayer)*0.03; monster.scale.set(s,s,s); monster.material.emissiveIntensity=0.8;} else {monster.scale.set(1,1,1);}
+      if(distToPlayer<MONSTER_GROWL_DIST){if(!monsterGrowlPlaying && growl.isBuffer){try{growl.play();}catch(e){} monsterGrowlPlaying=true;}} else {if(monsterGrowlPlaying && growl.isPlaying){try{growl.stop();}catch(e){} monsterGrowlPlaying=false;}}
+      if(distToPlayer<1.5) triggerGameOver();
     }
-
-    // Animation update
-    if (mixer) mixer.update(dt);
   }
 
-  // dans animate()
-  animate = () => {
+  // ---------------- MAIN LOOP ----------------
+  const clock = new THREE.Clock();
+  function animate(){
     requestAnimationFrame(animate);
     const dt = clock.getDelta();
-    // … avant render, appelle updateMonster(dt)
-    updateMonster(dt);
-    renderer.render(scene, camera);
-  };
+    const t = clock.elapsedTime;
 
-  // (le reste de ton script identique) …
+    updateNeonFlicker(t);
+
+    pitchObject.rotation.x = pitch;
+    yawObject.rotation.y = yaw;
+    yawObject.position.y = PLAYER_HEIGHT;
+
+    let kbForward=0,kbStrafe=0;
+    if(keys['KeyW']||keys['KeyZ']) kbForward+=1;
+    if(keys['KeyS']) kbForward-=1;
+    if(keys['KeyD']) kbStrafe+=1;
+    if(keys['KeyA']||keys['KeyQ']) kbStrafe-=1;
+    const finalForward=Math.abs(moveZ)>0.01?moveZ:kbForward;
+    const finalStrafe=Math.abs(moveX)>0.01?moveX:kbStrafe;
+
+    const currSpeed = isSprinting ? BASE_WALK_SPEED*SPRINT_MULT : BASE_WALK_SPEED;
+    const forward = new THREE.Vector3(0,0,-1).applyQuaternion(yawObject.quaternion).setY(0).normalize();
+    const right = new THREE.Vector3(1,0,0).applyQuaternion(yawObject.quaternion).setY(0).normalize();
+    const moveVec = forward.clone().multiplyScalar(finalForward*currSpeed*dt).add(right.clone().multiplyScalar(finalStrafe*currSpeed*dt));
+
+    const oldPos = yawObject.position.clone();
+    if(!gameOver) yawObject.position.add(moveVec);
+
+    const bound = MAP_HALF - PLAYER_RADIUS - 0.1;
+    if(yawObject.position.x<-bound || yawObject.position.x>bound || yawObject.position.z<-bound || yawObject.position.z>bound) yawObject.position.copy(oldPos);
+    else {for(let i=0;i<wallPositions.length;i++){const p=wallPositions[i];const dx=Math.abs(yawObject.position.x-p.x);const dz=Math.abs(yawObject.position.z-p.z); if(dx<CELL/2+PLAYER_RADIUS && dz<CELL/2+PLAYER_RADIUS){yawObject.position.copy(oldPos);break;}}}
+
+    const walking = !gameOver && (Math.abs(finalForward)>0.01 || Math.abs(finalStrafe)>0.01);
+    if(walking && !footstep.isPlaying) footstep.play();
+    if(!walking && footstep.isPlaying) footstep.pause();
+
+    updateMonster(dt);
+    if(monsterMixer) monsterMixer.update(dt);
+
+    renderer.render(scene,camera);
+  }
+  animate();
+
+  window.addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
   </script>
 </body>
 </html>
+
 
 
 
