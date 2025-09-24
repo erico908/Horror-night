@@ -2,15 +2,58 @@
 <html lang="fr">
 <head>
   <meta charset="utf-8" />
-  <title>Backrooms FPS + Monster (spawn behind) + Spotlight</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no" />
+  <title>Backrooms FPS avec Shrek</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <style>
-    html,body{height:100%;margin:0;background:#000;overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none}
-    #joystick{position:absolute;left:20px;bottom:30px;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,0.06);border:2px solid rgba(255,255,255,0.12);touch-action:none}
-    #stick{position:absolute;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,0.6);left:40px;top:40px;box-shadow:0 1px 6px rgba(0,0,0,0.6);transition:left .02s linear,top .02s linear}
-    #sprintBtn{position:absolute;right:25px;bottom:40px;width:90px;height:90px;border-radius:50%;background:rgba(255,255,255,0.15);border:2px solid rgba(255,255,255,0.25);color:#fff;font-size:18px;text-align:center;line-height:90px;user-select:none}
-    #gameOver{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.8);color:#fff;font-family:monospace;font-size:30px;z-index:999;display:none;flex-direction:column}
-    #gameOver button{margin-top:16px;padding:10px 18px;font-size:16px}
+    html, body {
+      height: 100%;
+      margin: 0;
+      background: #000;
+      overflow: hidden;
+      touch-action: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    #joystick {
+      position: absolute;
+      left: 20px; bottom: 30px;
+      width: 120px; height: 120px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.06);
+      border: 2px solid rgba(255,255,255,0.12);
+      touch-action: none;
+    }
+    #stick {
+      position: absolute;
+      width: 40px; height: 40px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.6);
+      left: 40px; top: 40px;
+      box-shadow: 0 1px 6px rgba(0,0,0,0.6);
+      transition: left 0.02s linear, top 0.02s linear;
+    }
+    #sprintBtn {
+      position: absolute;
+      right: 25px; bottom: 40px;
+      width: 90px; height: 90px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.15);
+      border: 2px solid rgba(255,255,255,0.25);
+      color: white; font-size: 18px;
+      text-align: center; line-height: 90px;
+      user-select: none;
+    }
+    #gameOver {
+      position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.8); color: #fff;
+      font-family: monospace; font-size: 30px; z-index: 999;
+      display: none;
+      flex-direction: column;
+    }
+    #gameOver button {
+      margin-top: 16px; padding: 10px 18px; font-size: 16px;
+    }
   </style>
 </head>
 <body>
@@ -19,39 +62,37 @@
   <div id="gameOver"><div>💀 Tu es mort...</div><button id="restartBtn">Recommencer</button></div>
 
   <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/loaders/GLTFLoader.js"></script>
+
   <script>
   // ---------------- CONFIG ----------------
   const MAP_HALF = 80;
   const CELL = 10;
   const PLAYER_HEIGHT = 1.6;
   const PLAYER_RADIUS = 0.5;
-  const BASE_WALK_SPEED = 2.5;   // marche (m/s)
-  const SPRINT_MULT = 2.0;       // sprint multiplier
+  const BASE_WALK_SPEED = 2.5;
+  const SPRINT_MULT = 2.0;
   const CAMERA_SENSITIVITY = 0.0035;
   const PITCH_LIMIT = Math.PI * 0.47;
   const JOY_MAX = 60, JOY_DEADZONE = 0.15;
 
-  // Monster config (updated per your request)
+  // Monster / Shrek config
   const MONSTER_ON_DURATION = 60.0;
   const MONSTER_OFF_DURATION = 60.0;
-  // Monster speed: "beaucoup plus rapide que la marche" but a bit less than sprint
-  const MONSTER_SPEED = (BASE_WALK_SPEED * SPRINT_MULT) * 0.95; // ~95% of sprint speed
-  const MONSTER_SPAWN_BEHIND_DIST = 10.0; // spawn 10m behind player
-  const MONSTER_MIN_SPAWN_DIST = 8.0;     // minimum allowed if fallback needed
-  const MONSTER_MAX_SPAWN_DIST = 40.0;
+  const MONSTER_SPEED = (BASE_WALK_SPEED * SPRINT_MULT) * 0.95;  // un peu moins que ta course
+  const MONSTER_SPAWN_BEHIND_DIST = 10.0;
   const MONSTER_GROWL_DIST = 8.0;
 
   // ---------------- THREE SETUP ----------------
   const scene = new THREE.Scene();
   scene.fog = new THREE.FogExp2(0xe6e6d8, 0.004);
 
-  const renderer = new THREE.WebGLRenderer({antialias:true});
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
   renderer.setSize(innerWidth, innerHeight);
   renderer.setClearColor(0x000000, 1);
   document.body.appendChild(renderer.domElement);
 
-  // FPS camera hierarchy
   const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 1000);
   camera.rotation.order = 'YXZ';
   const yawObject = new THREE.Object3D();
@@ -61,39 +102,37 @@
   yawObject.position.set(0, PLAYER_HEIGHT, 0);
   scene.add(yawObject);
 
-  // ---------- Spotlight attachée à la caméra ----------
+  // Spotlight attachée à la caméra
   const playerSpot = new THREE.SpotLight(0xffffff, 1.8, 40, Math.PI/6, 0.25, 1);
-  playerSpot.castShadow = false; // perf
-  // Attach to camera so it follows orientation exactly
   camera.add(playerSpot);
   camera.add(playerSpot.target);
   playerSpot.position.set(0, 0, 0);
   playerSpot.target.position.set(0, 0, -1);
-  // small subtle cone adaptation (no shadows to keep perf)
 
   // ---------------- TEXTURES ----------------
   const loader = new THREE.TextureLoader();
   const texFloor = loader.load("https://ambientcg.com/get?file=Carpet006_1K_Color.jpg", (t)=>{ t.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy()); });
   texFloor.wrapS = texFloor.wrapT = THREE.RepeatWrapping; texFloor.repeat.set(60,60);
-  const texWall = loader.load("https://ambientcg.com/get?file=Wallpaper001_1K_Color.jpg"); texWall.wrapS = texWall.wrapT = THREE.RepeatWrapping; texWall.repeat.set(4,2);
-  const texCeil = loader.load("https://ambientcg.com/get?file=CeilingTile001_1K_Color.jpg"); texCeil.wrapS = texCeil.wrapT = THREE.RepeatWrapping; texCeil.repeat.set(60,60);
+  const texWall = loader.load("https://ambientcg.com/get?file=Wallpaper001_1K_Color.jpg");
+  texWall.wrapS = texWall.wrapT = THREE.RepeatWrapping; texWall.repeat.set(4,2);
+  const texCeil = loader.load("https://ambientcg.com/get?file=CeilingTile001_1K_Color.jpg");
+  texCeil.wrapS = texCeil.wrapT = THREE.RepeatWrapping; texCeil.repeat.set(60,60);
 
-  // floor & ceiling
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(MAP_HALF*2, MAP_HALF*2), new THREE.MeshStandardMaterial({map:texFloor}));
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(MAP_HALF*2, MAP_HALF*2), new THREE.MeshStandardMaterial({ map: texFloor }));
   floor.rotation.x = -Math.PI/2; scene.add(floor);
-  const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(MAP_HALF*2, MAP_HALF*2), new THREE.MeshStandardMaterial({map:texCeil}));
+  const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(MAP_HALF*2, MAP_HALF*2), new THREE.MeshStandardMaterial({ map: texCeil }));
   ceiling.position.y = 3; ceiling.rotation.x = Math.PI/2; scene.add(ceiling);
 
-  // ---------------- WALLS (Instanced for perf) ----------------
+  // ---------------- WALLS (Instanced) ----------------
   const wallPositions = [];
-  const wallGeo = new THREE.BoxGeometry(CELL,3,CELL);
-  const wallMat = new THREE.MeshStandardMaterial({map:texWall});
+  const wallGeo = new THREE.BoxGeometry(CELL, 3, CELL);
+  const wallMat = new THREE.MeshStandardMaterial({ map: texWall });
 
   for (let x = -MAP_HALF + CELL/2; x <= MAP_HALF - CELL/2; x += CELL) {
     for (let z = -MAP_HALF + CELL/2; z <= MAP_HALF - CELL/2; z += CELL) {
       const isBorder = Math.abs(x) > MAP_HALF - CELL*1.5 || Math.abs(z) > MAP_HALF - CELL*1.5;
       if (isBorder || Math.random() > 0.82) {
-        wallPositions.push({x: x, z: z});
+        wallPositions.push({ x: x, z: z });
       }
     }
   }
@@ -108,11 +147,10 @@
   scene.add(instancedWalls);
   instancedWalls.instanceMatrix.needsUpdate = true;
 
-  // ---------------- LIGHTS ----------------
   scene.add(new THREE.AmbientLight(0xffffe0, 0.45));
   const neonLights = [];
-  for (let i=-60;i<=60;i+=30) {
-    for (let j=-60;j<=60;j+=30) {
+  for (let i=-60; i<=60; i+=30) {
+    for (let j=-60; j<=60; j+=30) {
       const l = new THREE.PointLight(0xffffcc, 0.65, 22, 2.2);
       l.position.set(i, 2.8, j);
       scene.add(l);
@@ -131,22 +169,38 @@
   const listener = new THREE.AudioListener();
   camera.add(listener);
   const footstep = new THREE.Audio(listener);
-  const loaderAudio = new THREE.AudioLoader();
-  loaderAudio.load("https://cdn.pixabay.com/download/audio/2021/08/04/audio_b64f3a542a.mp3?filename=footstep-carpet-1-6553.mp3",
-    (buf)=>{ footstep.setBuffer(buf); footstep.setLoop(true); footstep.setVolume(0.45); },
-    undefined, ()=>{});
+  const audioLoader = new THREE.AudioLoader();
+  audioLoader.load("https://cdn.pixabay.com/download/audio/2021/08/04/audio_b64f3a542a.mp3?filename=footstep-carpet-1-6553.mp3",
+    (buf) => {
+      footstep.setBuffer(buf);
+      footstep.setLoop(true);
+      footstep.setVolume(0.45);
+    },
+    undefined,
+    () => {}
+  );
 
-  // growl / scare (try to load a scary buffer; fallback silently)
   const growl = new THREE.Audio(listener);
-  loaderAudio.load("https://cdn.pixabay.com/download/audio/2021/08/04/audio_4b64b0fcd2.mp3?filename=neon-light-hum-14213.mp3",
-    (buf)=>{ growl.setBuffer(buf); growl.setLoop(true); growl.setVolume(0.45); },
-    undefined, ()=>{});
+  audioLoader.load("https://cdn.pixabay.com/download/audio/2021/08/04/audio_4b64b0fcd2.mp3?filename=neon-light-hum-14213.mp3",
+    (buf) => {
+      growl.setBuffer(buf);
+      growl.setLoop(true);
+      growl.setVolume(0.45);
+    },
+    undefined,
+    () => {}
+  );
 
-  // optional screech on kill
   const scream = new THREE.Audio(listener);
-  loaderAudio.load("https://cdn.pixabay.com/download/audio/2021/08/04/audio_9e3d2f4f9b.mp3?filename=terror-scream-6327.mp3",
-    (buf)=>{ scream.setBuffer(buf); scream.setLoop(false); scream.setVolume(0.9); },
-    undefined, ()=>{});
+  audioLoader.load("https://cdn.pixabay.com/download/audio/2021/08/04/audio_9e3d2f4f9b.mp3?filename=terror-scream-6327.mp3",
+    (buf) => {
+      scream.setBuffer(buf);
+      scream.setLoop(false);
+      scream.setVolume(0.9);
+    },
+    undefined,
+    () => {}
+  );
 
   // ---------------- INPUT & UI ----------------
   const joystick = document.getElementById('joystick');
@@ -157,91 +211,128 @@
 
   let yaw = 0, pitch = 0;
   let moveX = 0, moveZ = 0;
-  let joyTouchId = null, joyCenter = {x:0,y:0}, joyActive=false;
-  let camTouchId = null, lastCamX=0, lastCamY=0;
+  let joyTouchId = null, joyCenter = { x: 0, y: 0 }, joyActive = false;
+  let camTouchId = null, lastCamX = 0, lastCamY = 0;
   let isSprinting = false;
   let gameOver = false;
 
-  // joystick handlers (normalized, deadzone)
-  joystick.addEventListener('touchstart', (ev)=> {
+  joystick.addEventListener('touchstart', (ev) => {
     ev.preventDefault();
     for (const t of ev.changedTouches) {
-      if (joyTouchId === null) { joyTouchId = t.identifier; joyActive = true; const r = joystick.getBoundingClientRect(); joyCenter.x = r.left + r.width/2; joyCenter.y = r.top + r.height/2; }
+      if (joyTouchId === null) {
+        joyTouchId = t.identifier;
+        joyActive = true;
+        const r = joystick.getBoundingClientRect();
+        joyCenter.x = r.left + r.width/2;
+        joyCenter.y = r.top + r.height/2;
+      }
     }
-  }, {passive:false});
+  }, { passive: false });
 
-  joystick.addEventListener('touchmove', (ev)=> {
+  joystick.addEventListener('touchmove', (ev) => {
     ev.preventDefault();
     for (const t of ev.changedTouches) {
       if (t.identifier === joyTouchId && joyActive) {
         const dx = t.clientX - joyCenter.x;
         const dy = t.clientY - joyCenter.y;
-        const maxDist = JOY_MAX;
         let dist = Math.hypot(dx, dy);
-        if (dist > maxDist) dist = maxDist;
+        if (dist > JOY_MAX) dist = JOY_MAX;
         const ang = Math.atan2(dy, dx);
         stick.style.left = `${(60 - 20) + dist * Math.cos(ang)}px`;
         stick.style.top  = `${(60 - 20) + dist * Math.sin(ang)}px`;
-        let nx = dx / maxDist, ny = dy / maxDist;
+        let nx = dx / JOY_MAX, ny = dy / JOY_MAX;
         let len = Math.hypot(nx, ny);
-        if (len < JOY_DEADZONE) { moveX = 0; moveZ = 0; }
-        else { nx /= len; ny /= len; moveX = nx; moveZ = -ny; }
+        if (len < JOY_DEADZONE) {
+          moveX = 0; moveZ = 0;
+        } else {
+          nx /= len; ny /= len;
+          moveX = nx; moveZ = -ny;
+        }
       }
     }
-  }, {passive:false});
+  }, { passive: false });
 
-  joystick.addEventListener('touchend', (ev)=> {
+  joystick.addEventListener('touchend', (ev) => {
     ev.preventDefault();
     for (const t of ev.changedTouches) {
-      if (t.identifier === joyTouchId) { joyTouchId = null; joyActive = false; moveX = 0; moveZ = 0; stick.style.left = "40px"; stick.style.top = "40px"; }
+      if (t.identifier === joyTouchId) {
+        joyTouchId = null;
+        joyActive = false;
+        moveX = 0; moveZ = 0;
+        stick.style.left = "40px";
+        stick.style.top = "40px";
+      }
     }
-  }, {passive:false});
+  }, { passive: false });
 
-  // camera touch handlers
-  document.addEventListener('touchstart', (ev)=> {
+  document.addEventListener('touchstart', (ev) => {
     for (const t of ev.changedTouches) {
       if (t.target && t.target.closest && t.target.closest('#joystick')) continue;
       if (t.target && t.target.closest && t.target.closest('#sprintBtn')) continue;
-      if (camTouchId === null) { camTouchId = t.identifier; lastCamX = t.clientX; lastCamY = t.clientY; }
+      if (camTouchId === null) {
+        camTouchId = t.identifier;
+        lastCamX = t.clientX; lastCamY = t.clientY;
+      }
     }
-  }, {passive:true});
+  }, { passive: true });
 
-  document.addEventListener('touchmove', (ev)=> {
+  document.addEventListener('touchmove', (ev) => {
     for (const t of ev.changedTouches) {
       if (t.identifier === camTouchId) {
-        const dx = t.clientX - lastCamX, dy = t.clientY - lastCamY;
+        const dx = t.clientX - lastCamX;
+        const dy = t.clientY - lastCamY;
         lastCamX = t.clientX; lastCamY = t.clientY;
-        yaw -= dx * CAMERA_SENSITIVITY; pitch -= dy * CAMERA_SENSITIVITY;
+        yaw -= dx * CAMERA_SENSITIVITY;
+        pitch -= dy * CAMERA_SENSITIVITY;
         pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, pitch));
       }
     }
-  }, {passive:true});
+  }, { passive: true });
 
-  document.addEventListener('touchend', (ev)=> {
+  document.addEventListener('touchend', (ev) => {
     for (const t of ev.changedTouches) {
-      if (t.identifier === camTouchId) { camTouchId = null; }
+      if (t.identifier === camTouchId) {
+        camTouchId = null;
+      }
     }
-  }, {passive:true});
+  }, { passive: true });
 
-  // sprint button
-  sprintBtn.addEventListener('touchstart', (e)=> { e.preventDefault(); isSprinting = true; }, {passive:false});
-  sprintBtn.addEventListener('touchend',   (e)=> { e.preventDefault(); isSprinting = false; }, {passive:false});
+  sprintBtn.addEventListener('touchstart', (e) => { e.preventDefault(); isSprinting = true; }, { passive: false });
+  sprintBtn.addEventListener('touchend',   (e) => { e.preventDefault(); isSprinting = false; }, { passive: false });
 
-  // desktop helpers
-  let mouseDown=false, lastMouseX=0,lastMouseY=0;
-  document.addEventListener('mousedown', (e)=> { mouseDown=true; lastMouseX=e.clientX; lastMouseY=e.clientY; });
-  document.addEventListener('mousemove', (e)=> { if(!mouseDown) return; const dx=e.clientX-lastMouseX, dy=e.clientY-lastMouseY; lastMouseX=e.clientX; lastMouseY=e.clientY; yaw -= dx * CAMERA_SENSITIVITY * 1.2; pitch -= dy * CAMERA_SENSITIVITY * 1.2; pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, pitch)); });
-  document.addEventListener('mouseup', ()=> mouseDown=false);
-  const keys = {}; window.addEventListener('keydown', (e)=> keys[e.code]=true); window.addEventListener('keyup', (e)=> keys[e.code]=false);
+  let mouseDown = false, lastMouseX = 0, lastMouseY = 0;
+  document.addEventListener('mousedown', (e) => { mouseDown = true; lastMouseX = e.clientX; lastMouseY = e.clientY; });
+  document.addEventListener('mousemove', (e) => {
+    if (!mouseDown) return;
+    const dx = e.clientX - lastMouseX, dy = e.clientY - lastMouseY;
+    lastMouseX = e.clientX; lastMouseY = e.clientY;
+    yaw -= dx * CAMERA_SENSITIVITY * 1.2;
+    pitch -= dy * CAMERA_SENSITIVITY * 1.2;
+    pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, pitch));
+  });
+  document.addEventListener('mouseup', () => mouseDown = false);
 
-  restartBtn.addEventListener('click', ()=> location.reload());
+  const keys = {};
+  window.addEventListener('keydown', (e) => keys[e.code] = true);
+  window.addEventListener('keyup', (e) => keys[e.code] = false);
 
-  // ---------------- MONSTER IA ----------------
-  const monsterGeom = new THREE.BoxGeometry(1.0, 2.0, 1.0);
-  const monsterMat = new THREE.MeshStandardMaterial({ color: 0x220000, emissive: 0x440000, roughness: 0.6, metalness: 0.0 });
-  const monster = new THREE.Mesh(monsterGeom, monsterMat);
-  monster.visible = false;
-  scene.add(monster);
+  restartBtn.addEventListener('click', () => location.reload());
+
+  // ---------------- MONSTRE + ANIMATION ----------------
+  let mixer = null;
+  let monster = null;
+  loaderGLTF.load("shrek.glb", (gltf) => {
+    monster = gltf.scene;
+    monster.scale.set(1.3, 1.3, 1.3);
+    monster.visible = false;
+    scene.add(monster);
+
+    mixer = new THREE.AnimationMixer(monster);
+    if (gltf.animations.length > 0) {
+      const action = mixer.clipAction(gltf.animations[0]);
+      action.play();
+    }
+  });
 
   let monsterState = 'off';
   let monsterTimer = 0;
@@ -258,43 +349,30 @@
     return false;
   }
 
-  // try to spawn exactly ~10m behind player. If stuck, try small offsets, then fallback to random away spawn.
   function spawnMonsterBehindPlayer() {
+    if (!monster) return;
     const playerPos = yawObject.position.clone();
-    // forward vector (where player looks)
     const forward = new THREE.Vector3(0,0,-1).applyQuaternion(yawObject.quaternion).setY(0).normalize();
     const target = playerPos.clone().sub(forward.clone().multiplyScalar(MONSTER_SPAWN_BEHIND_DIST));
     const bound = MAP_HALF - 2.0;
-    // if in bounds and not colliding -> good
     if (Math.abs(target.x) <= bound && Math.abs(target.z) <= bound && !collidesWithWalls(target.x, target.z)) {
       monster.position.set(target.x, 1.0, target.z);
-      return true;
+      return;
     }
-    // try small angular offsets around behind position
-    for (let deg = -60; deg <= 60; deg += 15) {
-      const ang = Math.atan2(-forward.z, -forward.x) + deg * Math.PI / 180.0; // behind direction angle
-      const tx = playerPos.x + Math.cos(ang) * MONSTER_SPAWN_BEHIND_DIST;
-      const tz = playerPos.z + Math.sin(ang) * MONSTER_SPAWN_BEHIND_DIST;
-      if (Math.abs(tx) <= bound && Math.abs(tz) <= bound && !collidesWithWalls(tx, tz)) {
-        monster.position.set(tx, 1.0, tz);
-        return true;
-      }
-    }
-    // fallback: try random far spawn (previous strategy)
+    // fallback random spawn
     for (let attempt = 0; attempt < 40; attempt++) {
       const angle = Math.random() * Math.PI * 2;
-      const dist = MONSTER_MIN_SPAWN_DIST + Math.random() * (MONSTER_MAX_SPAWN_DIST - MONSTER_MIN_SPAWN_DIST);
+      const dist = MONSTER_SPAWN_BEHIND_DIST + Math.random() * (MAP_HALF * 0.5);
       const x = playerPos.x + Math.cos(angle) * dist;
       const z = playerPos.z + Math.sin(angle) * dist;
       if (Math.abs(x) > MAP_HALF - 2 || Math.abs(z) > MAP_HALF - 2) continue;
       if (!collidesWithWalls(x, z)) {
         monster.position.set(x, 1.0, z);
-        return true;
+        return;
       }
     }
-    // last fallback: place 10m behind ignoring collisions (rare)
+    // fallback behind
     monster.position.set(target.x, 1.0, target.z);
-    return false;
   }
 
   function triggerGameOver() {
@@ -306,53 +384,41 @@
     try { scream && scream.play(); } catch(e){}
   }
 
-  function updateMonster(dt) {
+  function updateMonster(delta) {
     if (gameOverFlag) return;
-
-    monsterTimer += dt;
+    monsterTimer += delta;
 
     if (monsterState === 'off') {
       if (monsterTimer >= MONSTER_OFF_DURATION) {
-        // ON: spawn behind player if possible
-        monsterState = 'on';
-        monsterTimer = 0;
-        monster.visible = true;
-        monsterGrowlPlaying = false;
-        // Attempt to spawn behind player; ensure player still able to move
+        monsterState = 'on'; monsterTimer = 0;
+        if (monster) monster.visible = true;
         spawnMonsterBehindPlayer();
-        // visual pop: slight scale up quickly
-        monster.scale.set(1,1,1);
       }
     } else {
       if (monsterTimer >= MONSTER_ON_DURATION) {
-        // turn off
-        monsterState = 'off';
-        monsterTimer = 0;
-        monster.visible = false;
+        monsterState = 'off'; monsterTimer = 0;
+        if (monster) monster.visible = false;
         if (growl.isPlaying) growl.stop();
         monsterGrowlPlaying = false;
         return;
       }
+      if (!monster) return;
 
-      // pursue player
       const target = new THREE.Vector3(yawObject.position.x, monster.position.y, yawObject.position.z);
       const dir = new THREE.Vector3().subVectors(target, monster.position);
       dir.y = 0;
       const distToPlayer = dir.length();
       if (distToPlayer > 0.001) dir.normalize();
 
-      // propose step (monster is noticeably fast)
-      const step = Math.min(MONSTER_SPEED * dt, distToPlayer);
+      const step = Math.min(MONSTER_SPEED * delta, distToPlayer);
       let nextPos = monster.position.clone().add(dir.clone().multiplyScalar(step));
 
-      // collision check: using wallPositions
       let collision = false;
       if (collidesWithWalls(nextPos.x, nextPos.z)) collision = true;
       const bound = MAP_HALF - 1.0;
       if (nextPos.x < -bound || nextPos.x > bound || nextPos.z < -bound || nextPos.z > bound) collision = true;
 
       if (collision) {
-        // try simple steering (perp offsets)
         const perp = new THREE.Vector3(-dir.z, 0, dir.x);
         let moved = false;
         for (let s = 0; s < 2; s++) {
@@ -364,45 +430,49 @@
             break;
           }
         }
-        if (!moved) {
-          nextPos = monster.position.clone(); // can't move
-        }
+        if (!moved) nextPos = monster.position.clone();
       }
 
       monster.position.copy(nextPos);
 
-      // face player visually (instant rotate)
-      const lookDir = new THREE.Vector3(yawObject.position.x - monster.position.x, 0, yawObject.position.z - monster.position.z);
-      if (lookDir.lengthSq() > 0.001) {
-        monster.rotation.y = Math.atan2(lookDir.x, lookDir.z);
+      // rotation to face player
+      const look = new THREE.Vector3(yawObject.position.x - monster.position.x, 0, yawObject.position.z - monster.position.z);
+      if (look.lengthSq() > 0.001) {
+        monster.rotation.y = Math.atan2(look.x, look.z);
       }
 
-      // spooky float + pulsing when close
       const bob = Math.sin(performance.now() * 0.002) * 0.12;
       monster.position.y = 1.0 + bob;
+
       if (distToPlayer < 6.0) {
-        const s = 1.0 + (6.0 - distToPlayer) * 0.03; // scale up slightly when very close
-        monster.scale.set(s,s,s);
+        const s = 1.0 + (6.0 - distToPlayer) * 0.03;
+        monster.scale.set(s, s, s);
         monster.material.emissiveIntensity = 0.8;
       } else {
         monster.scale.set(1,1,1);
       }
 
-      // growl when near
       if (distToPlayer < MONSTER_GROWL_DIST) {
-        if (!monsterGrowlPlaying && growl.isBuffer) { try { growl.play(); } catch(e){} monsterGrowlPlaying = true; }
+        if (!monsterGrowlPlaying && growl.isBuffer) {
+          try { growl.play(); } catch(e) {}
+          monsterGrowlPlaying = true;
+        }
       } else {
-        if (monsterGrowlPlaying && growl.isPlaying) { try { growl.stop(); } catch(e){} monsterGrowlPlaying = false; }
+        if (monsterGrowlPlaying && growl.isPlaying) {
+          try { growl.stop(); } catch(e) {}
+          monsterGrowlPlaying = false;
+        }
       }
 
-      // kill check (Game Over)
       if (distToPlayer < 1.5) {
         triggerGameOver();
       }
     }
+
+    if (mixer) mixer.update(delta);
   }
 
-  // ---------------- MAIN LOOP ----------------
+  // ---------------- ANIMATION LOO P ----------------
   const clock = new THREE.Clock();
 
   function animate() {
@@ -412,12 +482,10 @@
 
     updateNeonFlicker(t);
 
-    // apply camera rotations
     pitchObject.rotation.x = pitch;
     yawObject.rotation.y = yaw;
-    yawObject.position.y = PLAYER_HEIGHT; // locked height
+    yawObject.position.y = PLAYER_HEIGHT;
 
-    // keyboard fallback mapping
     let kbForward = 0, kbStrafe = 0;
     if (keys['KeyW'] || keys['KeyZ']) kbForward += 1;
     if (keys['KeyS']) kbForward -= 1;
@@ -427,17 +495,14 @@
     const finalForward = Math.abs(moveZ) > 0.01 ? moveZ : kbForward;
     const finalStrafe = Math.abs(moveX) > 0.01 ? moveX : kbStrafe;
 
-    // compute movement vector
     const currSpeed = (isSprinting ? BASE_WALK_SPEED * SPRINT_MULT : BASE_WALK_SPEED);
     const forward = new THREE.Vector3(0,0,-1).applyQuaternion(yawObject.quaternion).setY(0).normalize();
     const right = new THREE.Vector3(1,0,0).applyQuaternion(yawObject.quaternion).setY(0).normalize();
     const moveVec = forward.clone().multiplyScalar(finalForward * currSpeed * dt).add(right.clone().multiplyScalar(finalStrafe * currSpeed * dt));
 
-    // apply movement (unless game over)
     const oldPos = yawObject.position.clone();
     if (!gameOver) yawObject.position.add(moveVec);
 
-    // clamp bounding box + collisions with wallPositions
     const bound = MAP_HALF - PLAYER_RADIUS - 0.1;
     if (yawObject.position.x < -bound || yawObject.position.x > bound || yawObject.position.z < -bound || yawObject.position.z > bound) {
       yawObject.position.copy(oldPos);
@@ -453,20 +518,17 @@
       }
     }
 
-    // footsteps audio
     const walking = !gameOver && (Math.abs(finalForward) > 0.01 || Math.abs(finalStrafe) > 0.01);
     if (walking && !footstep.isPlaying) footstep.play();
     if (!walking && footstep.isPlaying) footstep.pause();
 
-    // update monster IA (before render)
     updateMonster(dt);
 
     renderer.render(scene, camera);
   }
   animate();
 
-  // ---------------- RESIZE ----------------
-  window.addEventListener('resize', ()=> {
+  window.addEventListener('resize', () => {
     camera.aspect = innerWidth / innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(innerWidth, innerHeight);
