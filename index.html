@@ -1,237 +1,301 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="utf-8" />
-  <title>Backrooms FPS + Shrek Monster + Spotlight</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no" />
+  <meta charset="UTF-8" />
+  <title>Backrooms Horror Game - Three.js</title>
   <style>
-    html,body{height:100%;margin:0;background:#000;overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none}
-    #joystick{position:absolute;left:20px;bottom:30px;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,0.06);border:2px solid rgba(255,255,255,0.12);touch-action:none}
-    #stick{position:absolute;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,0.6);left:40px;top:40px;box-shadow:0 1px 6px rgba(0,0,0,0.6);transition:left .02s linear,top .02s linear}
-    #sprintBtn{position:absolute;right:25px;bottom:40px;width:90px;height:90px;border-radius:50%;background:rgba(255,255,255,0.15);border:2px solid rgba(255,255,255,0.25);color:#fff;font-size:18px;text-align:center;line-height:90px;user-select:none}
-    #gameOver{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.8);color:#fff;font-family:monospace;font-size:30px;z-index:999;display:none;flex-direction:column}
-    #gameOver button{margin-top:16px;padding:10px 18px;font-size:16px}
+    body {
+      margin: 0; overflow: hidden; background: #222;
+      font-family: Arial, sans-serif;
+      color: white;
+    }
+    #info {
+      position: absolute; top: 10px; left: 10px;
+      z-index: 10; background: rgba(0,0,0,0.5);
+      padding: 10px; border-radius: 8px;
+      max-width: 300px;
+      font-size: 14px;
+    }
+    canvas {
+      display: block;
+    }
   </style>
 </head>
 <body>
-  <div id="joystick"><div id="stick"></div></div>
-  <div id="sprintBtn">Sprint</div>
-  <div id="gameOver"><div>💀 Tu es mort...</div><button id="restartBtn">Recommencer</button></div>
-
-  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/loaders/GLTFLoader.js"></script>
+  <div id="info">
+    <h3>Backrooms Horror Game</h3>
+    <p>
+      Contrôlez la lampe torche avec:<br>
+      - Clavier (ZQSD) + souris (déplacer souris pour regarder)<br>
+      - Manette (stick analogique droit)<br>
+      - Mobile (gyroscope)
+    </p>
+    <p>Le monstre vous suit, essayez de l’éviter dans cette ambiance oppressante...</p>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/examples/js/controls/PointerLockControls.js"></script>
 
   <script>
-  // ---------------- CONFIG ----------------
-  const MAP_HALF = 80;
-  const CELL = 10;
-  const PLAYER_HEIGHT = 1.6;
-  const PLAYER_RADIUS = 0.5;
-  const BASE_WALK_SPEED = 2.5;
-  const SPRINT_MULT = 2.0;
-  const CAMERA_SENSITIVITY = 0.0035;
-  const PITCH_LIMIT = Math.PI * 0.47;
-  const JOY_MAX = 60, JOY_DEADZONE = 0.15;
+    let scene, camera, renderer, controls;
+    let player, monster, monsterSpeed = 0.02;
+    let flashlight, flashlightTarget;
+    let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
+    let velocity = new THREE.Vector3();
+    let direction = new THREE.Vector3();
+    let prevTime = performance.now();
+    let raycaster;
 
-  const MONSTER_ON_DURATION = 60.0;
-  const MONSTER_OFF_DURATION = 60.0;
-  const MONSTER_SPEED = (BASE_WALK_SPEED * SPRINT_MULT) * 0.95;
-  const MONSTER_SPAWN_BEHIND_DIST = 10.0;
-  const MONSTER_MIN_SPAWN_DIST = 8.0;
-  const MONSTER_MAX_SPAWN_DIST = 40.0;
-  const MONSTER_GROWL_DIST = 8.0;
+    // For gamepad support
+    let gamepadIndex = null;
 
-  // ---------------- THREE SETUP ----------------
-  const scene = new THREE.Scene();
-  scene.fog = new THREE.FogExp2(0xe6e6d8, 0.004);
+    // Gyroscope data (mobile)
+    let gyroBeta = 0;
+    let gyroGamma = 0;
 
-  const renderer = new THREE.WebGLRenderer({antialias:true});
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
-  renderer.setSize(innerWidth, innerHeight);
-  renderer.setClearColor(0x000000, 1);
-  document.body.appendChild(renderer.domElement);
+    init();
+    animate();
 
-  const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 1000);
-  camera.rotation.order = 'YXZ';
-  const yawObject = new THREE.Object3D();
-  const pitchObject = new THREE.Object3D();
-  yawObject.add(pitchObject);
-  pitchObject.add(camera);
-  yawObject.position.set(0, PLAYER_HEIGHT, 0);
-  scene.add(yawObject);
+    function init() {
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x252525);
 
-  const playerSpot = new THREE.SpotLight(0xffffff, 1.8, 40, Math.PI/6, 0.25, 1);
-  playerSpot.castShadow = false;
-  camera.add(playerSpot);
-  camera.add(playerSpot.target);
-  playerSpot.position.set(0, 0, 0);
-  playerSpot.target.position.set(0, 0, -1);
+      // Camera
+      camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+      camera.position.y = 1.6; // eye height
 
-  // ---------------- TEXTURES ----------------
-  const loader = new THREE.TextureLoader();
-  const texFloor = loader.load("https://ambientcg.com/get?file=Carpet006_1K_Color.jpg", (t)=>{ t.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy()); });
-  texFloor.wrapS = texFloor.wrapT = THREE.RepeatWrapping; texFloor.repeat.set(60,60);
-  const texWall = loader.load("https://ambientcg.com/get?file=Wallpaper001_1K_Color.jpg"); texWall.wrapS = texWall.wrapT = THREE.RepeatWrapping; texWall.repeat.set(4,2);
-  const texCeil = loader.load("https://ambientcg.com/get?file=CeilingTile001_1K_Color.jpg"); texCeil.wrapS = texCeil.wrapT = THREE.RepeatWrapping; texCeil.repeat.set(60,60);
+      // Renderer
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.shadowMap.enabled = true;
+      document.body.appendChild(renderer.domElement);
 
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(MAP_HALF*2, MAP_HALF*2), new THREE.MeshStandardMaterial({map:texFloor}));
-  floor.rotation.x = -Math.PI/2; scene.add(floor);
-  const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(MAP_HALF*2, MAP_HALF*2), new THREE.MeshStandardMaterial({map:texCeil}));
-  ceiling.position.y = 3; ceiling.rotation.x = Math.PI/2; scene.add(ceiling);
+      // Controls & pointer lock
+      controls = new THREE.PointerLockControls(camera, document.body);
 
-  // ---------------- WALLS ----------------
-  const wallPositions = [];
-  const wallGeo = new THREE.BoxGeometry(CELL,3,CELL);
-  const wallMat = new THREE.MeshStandardMaterial({map:texWall});
-  for (let x = -MAP_HALF + CELL/2; x <= MAP_HALF - CELL/2; x += CELL) {
-    for (let z = -MAP_HALF + CELL/2; z <= MAP_HALF - CELL/2; z += CELL) {
-      const isBorder = Math.abs(x) > MAP_HALF - CELL*1.5 || Math.abs(z) > MAP_HALF - CELL*1.5;
-      if (isBorder || Math.random() > 0.82) wallPositions.push({x:x,z:z});
+      document.body.addEventListener('click', () => {
+        controls.lock();
+      });
+
+      controls.addEventListener('lock', () => {
+        document.getElementById('info').style.display = 'none';
+      });
+
+      controls.addEventListener('unlock', () => {
+        document.getElementById('info').style.display = 'block';
+      });
+
+      // Player is abstract, but for monster tracking keep position
+      player = controls.getObject();
+
+      // Simple floor - yellowish walls to replicate backrooms
+      const floorGeometry = new THREE.PlaneGeometry(100, 100);
+      const floorMaterial = new THREE.MeshStandardMaterial({ color: 0xeedc82, side: THREE.DoubleSide });
+      const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+      floor.rotation.x = -Math.PI / 2;
+      floor.receiveShadow = true;
+      scene.add(floor);
+
+      // Walls (some simple cubes around to simulate corridors)
+      const wallMaterial = new THREE.MeshStandardMaterial({ color: 0xf3e5ab });
+
+      function createWall(x, y, z, w, h, d) {
+        const geo = new THREE.BoxGeometry(w, h, d);
+        const wall = new THREE.Mesh(geo, wallMaterial);
+        wall.position.set(x, y, z);
+        wall.castShadow = true;
+        wall.receiveShadow = true;
+        scene.add(wall);
+        return wall;
+      }
+
+      // Create simple corridor walls
+      createWall(0, 1.5, -20, 20, 3, 1);
+      createWall(0, 1.5, 20, 20, 3, 1);
+      createWall(-10, 1.5, 0, 1, 3, 40);
+      createWall(10, 1.5, 0, 1, 3, 40);
+
+      // Monster — simple red box with emissive light for glow
+      const monsterGeometry = new THREE.BoxGeometry(1, 2, 1);
+      const monsterMaterial = new THREE.MeshStandardMaterial({
+        color: 0x880000,
+        emissive: 0x550000,
+        emissiveIntensity: 0.5
+      });
+      monster = new THREE.Mesh(monsterGeometry, monsterMaterial);
+      monster.position.set(0, 1, 10); // Start behind player
+      monster.castShadow = true;
+      scene.add(monster);
+
+      // A red point light on monster for glow effect
+      const monsterLight = new THREE.PointLight(0xff4400, 1, 10);
+      monsterLight.position.set(0, 1.5, 0);
+      monster.add(monsterLight);
+
+      // Flashlight (spotlight attached to camera)
+      flashlight = new THREE.SpotLight(0xffffff, 2, 20, Math.PI / 6, 0.2, 1);
+      flashlight.position.set(0, 0, 0);
+      flashlight.castShadow = true;
+      flashlight.shadow.mapSize.width = 1024;
+      flashlight.shadow.mapSize.height = 1024;
+      flashlight.shadow.camera.near = 0.1;
+      flashlight.shadow.camera.far = 25;
+      flashlight.shadow.bias = -0.005;
+
+      camera.add(flashlight);
+      camera.add(flashlight.target);
+      flashlight.target.position.set(0, 0, -1);
+
+      // Ambient light for subtle overall lighting
+      const ambient = new THREE.AmbientLight(0x555555);
+      scene.add(ambient);
+
+      // Raycaster for collision and light interaction
+      raycaster = new THREE.Raycaster();
+
+      // Resize handler
+      window.addEventListener('resize', onWindowResize, false);
+
+      // Keyboard events
+      document.addEventListener('keydown', onKeyDown, false);
+      document.addEventListener('keyup', onKeyUp, false);
+
+      // Mouse movement - pointer lock controls handle camera rotation automatically
+
+      // Gamepad connection handler
+      window.addEventListener("gamepadconnected", (e) => {
+        gamepadIndex = e.gamepad.index;
+        console.log("Gamepad connecté:", e.gamepad.id);
+      });
+      window.addEventListener("gamepaddisconnected", (e) => {
+        if(gamepadIndex === e.gamepad.index) gamepadIndex = null;
+        console.log("Gamepad déconnecté");
+      });
+
+      // Mobile Gyroscope
+      if(window.DeviceOrientationEvent) {
+        window.addEventListener('deviceorientation', (event) => {
+          gyroBeta = event.beta; // [-180,180], front-back tilt
+          gyroGamma = event.gamma; // [-90,90], left-right tilt
+        }, true);
+      }
     }
-  }
-  const instancedWalls = new THREE.InstancedMesh(wallGeo, wallMat, wallPositions.length);
-  const tmp = new THREE.Object3D();
-  for (let i=0;i<wallPositions.length;i++){tmp.position.set(wallPositions[i].x,1.5,wallPositions[i].z); tmp.updateMatrix(); instancedWalls.setMatrixAt(i,tmp.matrix);}
-  scene.add(instancedWalls); instancedWalls.instanceMatrix.needsUpdate = true;
 
-  // ---------------- LIGHTS ----------------
-  scene.add(new THREE.AmbientLight(0xffffe0, 0.45));
-  const neonLights = [];
-  for (let i=-60;i<=60;i+=30){for(let j=-60;j<=60;j+=30){const l = new THREE.PointLight(0xffffcc,0.65,22,2.2); l.position.set(i,2.8,j); scene.add(l); neonLights.push(l);}}
-  function updateNeonFlicker(t){neonLights.forEach((l,idx)=>{const base=0.7+Math.sin(t*3.0+idx)*0.05;const spike=(Math.random()>0.997)?1.6:1.0;l.intensity=base*spike;});}
-
-  // ---------------- AUDIO ----------------
-  const listener = new THREE.AudioListener(); camera.add(listener);
-  const footstep = new THREE.Audio(listener);
-  const loaderAudio = new THREE.AudioLoader();
-  loaderAudio.load("https://cdn.pixabay.com/download/audio/2021/08/04/audio_b64f3a542a.mp3?filename=footstep-carpet-1-6553.mp3",(buf)=>{footstep.setBuffer(buf);footstep.setLoop(true);footstep.setVolume(0.45);});
-  const growl = new THREE.Audio(listener);
-  loaderAudio.load("https://cdn.pixabay.com/download/audio/2021/08/04/audio_4b64b0fcd2.mp3?filename=neon-light-hum-14213.mp3",(buf)=>{growl.setBuffer(buf);growl.setLoop(true);growl.setVolume(0.45);});
-  const scream = new THREE.Audio(listener);
-  loaderAudio.load("https://cdn.pixabay.com/download/audio/2021/08/04/audio_9e3d2f4f9b.mp3?filename=terror-scream-6327.mp3",(buf)=>{scream.setBuffer(buf);scream.setLoop(false);scream.setVolume(0.9);});
-
-  // ---------------- INPUT & UI ----------------
-  const joystick = document.getElementById('joystick');
-  const stick = document.getElementById('stick');
-  const sprintBtn = document.getElementById('sprintBtn');
-  const gameOverDiv = document.getElementById('gameOver');
-  const restartBtn = document.getElementById('restartBtn');
-
-  let yaw=0, pitch=0, moveX=0, moveZ=0, joyTouchId=null, joyCenter={x:0,y:0}, joyActive=false;
-  let camTouchId=null,lastCamX=0,lastCamY=0,isSprinting=false,gameOver=false;
-  const keys = {};
-  window.addEventListener('keydown',e=>keys[e.code]=true); window.addEventListener('keyup',e=>keys[e.code]=false);
-  restartBtn.addEventListener('click',()=>location.reload());
-  
-  // ---------- MONSTER ----------
-  const monster = new THREE.Mesh(new THREE.BoxGeometry(1,2,1), new THREE.MeshStandardMaterial({color:0x220000,emissive:0x440000,roughness:0.6,metalness:0}));
-  monster.visible=false; scene.add(monster);
-  let monsterState='off',monsterTimer=0,monsterGrowlPlaying=false,gameOverFlag=false;
-  
-  // ---------- Remplacer cube par Shrek -----------
-  let monsterMixer = null;
-  const gltfLoader = new THREE.GLTFLoader();
-  gltfLoader.load('shrek_walk_cycle.glb', function(gltf){
-      const model = gltf.scene;
-      model.scale.set(0.5,0.5,0.5);
-      monster.add(model);
-      monsterMixer = new THREE.AnimationMixer(model);
-      gltf.animations.forEach(clip=>monsterMixer.clipAction(clip).play());
-  });
-
-  function collidesWithWalls(x,z){for(let i=0;i<wallPositions.length;i++){const p=wallPositions[i];if(Math.abs(x-p.x)<CELL/2+PLAYER_RADIUS && Math.abs(z-p.z)<CELL/2+PLAYER_RADIUS) return true;}return false;}
-
-  function spawnMonsterBehindPlayer(){
-    const playerPos = yawObject.position.clone();
-    const forward = new THREE.Vector3(0,0,-1).applyQuaternion(yawObject.quaternion).setY(0).normalize();
-    const target = playerPos.clone().sub(forward.clone().multiplyScalar(MONSTER_SPAWN_BEHIND_DIST));
-    const bound = MAP_HALF-2.0;
-    if(Math.abs(target.x)<=bound && Math.abs(target.z)<=bound && !collidesWithWalls(target.x,target.z)){monster.position.set(target.x,1.0,target.z); return true;}
-    for(let deg=-60;deg<=60;deg+=15){const ang = Math.atan2(-forward.z,-forward.x)+deg*Math.PI/180.0; const tx=playerPos.x+Math.cos(ang)*MONSTER_SPAWN_BEHIND_DIST; const tz=playerPos.z+Math.sin(ang)*MONSTER_SPAWN_BEHIND_DIST; if(Math.abs(tx)<=bound && Math.abs(tz)<=bound && !collidesWithWalls(tx,tz)){monster.position.set(tx,1.0,tz); return true;}}
-    for(let attempt=0;attempt<40;attempt++){const angle=Math.random()*Math.PI*2; const dist=MONSTER_MIN_SPAWN_DIST+Math.random()*(MONSTER_MAX_SPAWN_DIST-MONSTER_MIN_SPAWN_DIST); const x=playerPos.x+Math.cos(angle)*dist; const z=playerPos.z+Math.sin(angle)*dist; if(Math.abs(x)>MAP_HALF-2 || Math.abs(z)>MAP_HALF-2) continue; if(!collidesWithWalls(x,z)){monster.position.set(x,1.0,z); return true;}}
-    monster.position.set(target.x,1.0,target.z); return false;
-  }
-
-  function triggerGameOver(){if(gameOverFlag)return; gameOverFlag=true; gameOverDiv.style.display='flex'; try{footstep.pause();}catch(e){} try{growl.stop();}catch(e){} try{scream.play();}catch(e){}}
-
-  function updateMonster(dt){
-    if(gameOverFlag)return;
-    monsterTimer+=dt;
-    if(monsterState==='off'){if(monsterTimer>=MONSTER_OFF_DURATION){monsterState='on';monsterTimer=0; monster.visible=true; monsterGrowlPlaying=false; spawnMonsterBehindPlayer(); monster.scale.set(1,1,1);}}
-    else{
-      if(monsterTimer>=MONSTER_ON_DURATION){monsterState='off';monsterTimer=0; monster.visible=false; if(growl.isPlaying) growl.stop(); monsterGrowlPlaying=false; return;}
-      const target = new THREE.Vector3(yawObject.position.x,monster.position.y,yawObject.position.z);
-      const dir = new THREE.Vector3().subVectors(target,monster.position); dir.y=0; const distToPlayer=dir.length(); if(distToPlayer>0.001) dir.normalize();
-      const step = Math.min(MONSTER_SPEED*dt, distToPlayer);
-      let nextPos = monster.position.clone().add(dir.clone().multiplyScalar(step));
-      let collision = false;
-      if(collidesWithWalls(nextPos.x,nextPos.z)) collision=true;
-      const bound=MAP_HALF-1.0; if(nextPos.x<-bound || nextPos.x>bound || nextPos.z<-bound || nextPos.z>bound) collision=true;
-      if(collision){const perp = new THREE.Vector3(-dir.z,0,dir.x); let moved=false; for(let s=0;s<2;s++){const sign=s===0?1:-1; const alt = monster.position.clone().add(dir.clone().multiplyScalar(step*0.9)).add(perp.clone().multiplyScalar(sign*step*0.9)); if(!collidesWithWalls(alt.x,alt.z) && Math.abs(alt.x)<=bound && Math.abs(alt.z)<=bound){nextPos=alt; moved=true; break;}} if(!moved) nextPos=monster.position.clone();}
-      monster.position.copy(nextPos);
-      const lookDir = new THREE.Vector3(yawObject.position.x-monster.position.x,0,yawObject.position.z-monster.position.z);
-      if(lookDir.lengthSq()>0.001) monster.rotation.y=Math.atan2(lookDir.x,lookDir.z);
-      const bob = Math.sin(performance.now()*0.002)*0.12; monster.position.y = 1.0 + bob;
-      if(distToPlayer<6.0){const s=1.0+(6.0-distToPlayer)*0.03; monster.scale.set(s,s,s); monster.material.emissiveIntensity=0.8;} else {monster.scale.set(1,1,1);}
-      if(distToPlayer<MONSTER_GROWL_DIST){if(!monsterGrowlPlaying && growl.isBuffer){try{growl.play();}catch(e){} monsterGrowlPlaying=true;}} else {if(monsterGrowlPlaying && growl.isPlaying){try{growl.stop();}catch(e){} monsterGrowlPlaying=false;}}
-      if(distToPlayer<1.5) triggerGameOver();
+    function onWindowResize() {
+      camera.aspect = window.innerWidth/window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
     }
-  }
 
-  // ---------------- MAIN LOOP ----------------
-  const clock = new THREE.Clock();
-  function animate(){
-    requestAnimationFrame(animate);
-    const dt = clock.getDelta();
-    const t = clock.elapsedTime;
+    function onKeyDown(event) {
+      switch(event.code) {
+        case 'KeyZ':
+        case 'ArrowUp':
+          moveForward = true; break;
+        case 'KeyS':
+        case 'ArrowDown':
+          moveBackward = true; break;
+        case 'KeyQ':
+        case 'ArrowLeft':
+          moveLeft = true; break;
+        case 'KeyD':
+        case 'ArrowRight':
+          moveRight = true; break;
+      }
+    }
 
-    updateNeonFlicker(t);
+    function onKeyUp(event) {
+      switch(event.code) {
+        case 'KeyZ':
+        case 'ArrowUp':
+          moveForward = false; break;
+        case 'KeyS':
+        case 'ArrowDown':
+          moveBackward = false; break;
+        case 'KeyQ':
+        case 'ArrowLeft':
+          moveLeft = false; break;
+        case 'KeyD':
+        case 'ArrowRight':
+          moveRight = false; break;
+      }
+    }
 
-    pitchObject.rotation.x = pitch;
-    yawObject.rotation.y = yaw;
-    yawObject.position.y = PLAYER_HEIGHT;
+    function animate() {
+      requestAnimationFrame(animate);
 
-    let kbForward=0,kbStrafe=0;
-    if(keys['KeyW']||keys['KeyZ']) kbForward+=1;
-    if(keys['KeyS']) kbForward-=1;
-    if(keys['KeyD']) kbStrafe+=1;
-    if(keys['KeyA']||keys['KeyQ']) kbStrafe-=1;
-    const finalForward=Math.abs(moveZ)>0.01?moveZ:kbForward;
-    const finalStrafe=Math.abs(moveX)>0.01?moveX:kbStrafe;
+      const time = performance.now();
+      const delta = (time - prevTime) / 1000;
 
-    const currSpeed = isSprinting ? BASE_WALK_SPEED*SPRINT_MULT : BASE_WALK_SPEED;
-    const forward = new THREE.Vector3(0,0,-1).applyQuaternion(yawObject.quaternion).setY(0).normalize();
-    const right = new THREE.Vector3(1,0,0).applyQuaternion(yawObject.quaternion).setY(0).normalize();
-    const moveVec = forward.clone().multiplyScalar(finalForward*currSpeed*dt).add(right.clone().multiplyScalar(finalStrafe*currSpeed*dt));
+      if(controls.isLocked === true) {
 
-    const oldPos = yawObject.position.clone();
-    if(!gameOver) yawObject.position.add(moveVec);
+        // Player Movement
+        velocity.x -= velocity.x * 10.0 * delta;
+        velocity.z -= velocity.z * 10.0 * delta;
 
-    const bound = MAP_HALF - PLAYER_RADIUS - 0.1;
-    if(yawObject.position.x<-bound || yawObject.position.x>bound || yawObject.position.z<-bound || yawObject.position.z>bound) yawObject.position.copy(oldPos);
-    else {for(let i=0;i<wallPositions.length;i++){const p=wallPositions[i];const dx=Math.abs(yawObject.position.x-p.x);const dz=Math.abs(yawObject.position.z-p.z); if(dx<CELL/2+PLAYER_RADIUS && dz<CELL/2+PLAYER_RADIUS){yawObject.position.copy(oldPos);break;}}}
+        direction.z = Number(moveForward) - Number(moveBackward);
+        direction.x = Number(moveRight) - Number(moveLeft);
+        direction.normalize();
 
-    const walking = !gameOver && (Math.abs(finalForward)>0.01 || Math.abs(finalStrafe)>0.01);
-    if(walking && !footstep.isPlaying) footstep.play();
-    if(!walking && footstep.isPlaying) footstep.pause();
+        const speed = 5.0;
 
-    updateMonster(dt);
-    if(monsterMixer) monsterMixer.update(dt);
+        if(direction.length() > 0) {
+          velocity.x -= direction.x * speed * delta;
+          velocity.z -= direction.z * speed * delta;
+        }
 
-    renderer.render(scene,camera);
-  }
-  animate();
+        controls.moveRight(- velocity.x * delta);
+        controls.moveForward(- velocity.z * delta);
 
-  window.addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
+      }
+
+      // Monster follow player
+      const playerPosition = player.position.clone();
+      const monsterPosition = monster.position.clone();
+
+      let toPlayerVec = playerPosition.sub(monsterPosition);
+      let distance = toPlayerVec.length();
+
+      if(distance > 1) {
+        toPlayerVec.normalize();
+        monster.position.add(toPlayerVec.multiplyScalar(monsterSpeed));
+      }
+
+      // Monster simple oscillation for creepy effect
+      monster.position.y = 1 + 0.1 * Math.sin(time * 0.005);
+
+      // Update flashlight target based on inputs
+
+      // Mobile gyro controls lamp torch direction
+      // Small mapping of beta/gamma to flashlight target angles on camera local z axis
+      flashlight.target.position.x = THREE.MathUtils.clamp(gyroGamma / 30, -1, 1);
+      flashlight.target.position.y = THREE.MathUtils.clamp(-gyroBeta / 30, -1, 1);
+      flashlight.target.position.z = -1;
+
+      // Gamepad right stick controls flashlight direction
+      if(gamepadIndex !== null) {
+        const gp = navigator.getGamepads()[gamepadIndex];
+        if(gp) {
+          // axes 2 (X), 3 (Y) for right stick (common)
+          let rx = gp.axes[2];
+          let ry = gp.axes[3];
+          // Apply deadzone
+          if(Math.abs(rx) < 0.1) rx = 0;
+          if(Math.abs(ry) < 0.1) ry = 0;
+          flashlight.target.position.x = THREE.MathUtils.clamp(rx, -1, 1);
+          flashlight.target.position.y = THREE.MathUtils.clamp(-ry, -1, 1);
+          flashlight.target.position.z = -1;
+        }
+      }
+
+      // Clamp flashlight target more to center based on mouse movement (already included in PointerLockControls)
+
+      // Keep flashlight target normalized direction
+      flashlight.target.position.normalize().multiplyScalar(1);
+
+      prevTime = time;
+
+      renderer.render(scene, camera);
+    }
   </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
