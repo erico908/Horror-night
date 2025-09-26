@@ -9,12 +9,45 @@
       font-family: Arial, sans-serif;
       color: white;
     }
+    #startScreen {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #111;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 20;
+      user-select: none;
+    }
+    #startScreen h1 {
+      font-size: 3em;
+      margin-bottom: 20px;
+      color: #eec973;
+      text-shadow: 0 0 10px #ffaa00;
+    }
+    #startScreen button {
+      padding: 15px 40px;
+      font-size: 1.2em;
+      cursor: pointer;
+      border: none;
+      border-radius: 10px;
+      background: linear-gradient(45deg, #ffaa00, #ff7700);
+      color: black;
+      box-shadow: 0 0 10px #ff7700;
+      transition: background 0.3s ease;
+    }
+    #startScreen button:hover {
+      background: linear-gradient(45deg, #ffcc33, #ff9900);
+      box-shadow: 0 0 20px #ffcc33;
+    }
     #info {
       position: absolute; top: 10px; left: 10px;
       z-index: 10; background: rgba(0,0,0,0.5);
       padding: 10px; border-radius: 8px;
       max-width: 300px;
       font-size: 14px;
+      user-select: none;
     }
     canvas {
       display: block;
@@ -22,16 +55,21 @@
   </style>
 </head>
 <body>
-  <div id="info">
-    <h3>Backrooms Horror Game</h3>
+  <div id="startScreen">
+    <h1>Backrooms Horror Game</h1>
+    <button id="playBtn">Jouer</button>
+  </div>
+
+  <div id="info" style="display:none;">
     <p>
-      Contrôlez la lampe torche avec:<br>
+      Contrôlez la lampe torche avec :<br>
       - Clavier (ZQSD) + souris (déplacer souris pour regarder)<br>
       - Manette (stick analogique droit)<br>
       - Mobile (gyroscope)
     </p>
     <p>Le monstre vous suit, essayez de l’éviter dans cette ambiance oppressante...</p>
   </div>
+
   <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/examples/js/controls/PointerLockControls.js"></script>
 
@@ -52,8 +90,22 @@
     let gyroBeta = 0;
     let gyroGamma = 0;
 
+    let gameStarted = false;
+
+    const infoDiv = document.getElementById('info');
+    const startScreen = document.getElementById('startScreen');
+    const playBtn = document.getElementById('playBtn');
+
+    playBtn.addEventListener('click', () => {
+      startScreen.style.display = 'none';
+      infoDiv.style.display = 'block';
+      
+      // Lock pointer automatically on play
+      controls.lock();
+      gameStarted = true;
+    });
+
     init();
-    animate();
 
     function init() {
       scene = new THREE.Scene();
@@ -72,22 +124,19 @@
       // Controls & pointer lock
       controls = new THREE.PointerLockControls(camera, document.body);
 
-      document.body.addEventListener('click', () => {
-        controls.lock();
-      });
-
+      // When pointer lock/unlock update info visibility
       controls.addEventListener('lock', () => {
-        document.getElementById('info').style.display = 'none';
+        if(gameStarted) infoDiv.style.display = 'block';
       });
 
       controls.addEventListener('unlock', () => {
-        document.getElementById('info').style.display = 'block';
+        if(gameStarted) infoDiv.style.display = 'none';
       });
 
-      // Player is abstract, but for monster tracking keep position
+      // Player is abstract, for monster tracking keep position
       player = controls.getObject();
 
-      // Simple floor - yellowish walls to replicate backrooms
+      // Simple floor - yellowish walls for backrooms vibe
       const floorGeometry = new THREE.PlaneGeometry(100, 100);
       const floorMaterial = new THREE.MeshStandardMaterial({ color: 0xeedc82, side: THREE.DoubleSide });
       const floor = new THREE.Mesh(floorGeometry, floorMaterial);
@@ -95,7 +144,7 @@
       floor.receiveShadow = true;
       scene.add(floor);
 
-      // Walls (some simple cubes around to simulate corridors)
+      // Walls
       const wallMaterial = new THREE.MeshStandardMaterial({ color: 0xf3e5ab });
 
       function createWall(x, y, z, w, h, d) {
@@ -108,13 +157,13 @@
         return wall;
       }
 
-      // Create simple corridor walls
+      // Corridor walls
       createWall(0, 1.5, -20, 20, 3, 1);
       createWall(0, 1.5, 20, 20, 3, 1);
       createWall(-10, 1.5, 0, 1, 3, 40);
       createWall(10, 1.5, 0, 1, 3, 40);
 
-      // Monster — simple red box with emissive light for glow
+      // Monster
       const monsterGeometry = new THREE.BoxGeometry(1, 2, 1);
       const monsterMaterial = new THREE.MeshStandardMaterial({
         color: 0x880000,
@@ -122,16 +171,16 @@
         emissiveIntensity: 0.5
       });
       monster = new THREE.Mesh(monsterGeometry, monsterMaterial);
-      monster.position.set(0, 1, 10); // Start behind player
+      monster.position.set(0, 1, 10);
       monster.castShadow = true;
       scene.add(monster);
 
-      // A red point light on monster for glow effect
+      // Monster light glow
       const monsterLight = new THREE.PointLight(0xff4400, 1, 10);
       monsterLight.position.set(0, 1.5, 0);
       monster.add(monsterLight);
 
-      // Flashlight (spotlight attached to camera)
+      // Flashlight - spotlight on camera
       flashlight = new THREE.SpotLight(0xffffff, 2, 20, Math.PI / 6, 0.2, 1);
       flashlight.position.set(0, 0, 0);
       flashlight.castShadow = true;
@@ -145,37 +194,30 @@
       camera.add(flashlight.target);
       flashlight.target.position.set(0, 0, -1);
 
-      // Ambient light for subtle overall lighting
+      // Ambient light
       const ambient = new THREE.AmbientLight(0x555555);
       scene.add(ambient);
 
-      // Raycaster for collision and light interaction
       raycaster = new THREE.Raycaster();
 
-      // Resize handler
       window.addEventListener('resize', onWindowResize, false);
-
-      // Keyboard events
       document.addEventListener('keydown', onKeyDown, false);
       document.addEventListener('keyup', onKeyUp, false);
 
-      // Mouse movement - pointer lock controls handle camera rotation automatically
-
-      // Gamepad connection handler
       window.addEventListener("gamepadconnected", (e) => {
         gamepadIndex = e.gamepad.index;
-        console.log("Gamepad connecté:", e.gamepad.id);
+        console.log("Gamepad connected:", e.gamepad.id);
       });
       window.addEventListener("gamepaddisconnected", (e) => {
         if(gamepadIndex === e.gamepad.index) gamepadIndex = null;
-        console.log("Gamepad déconnecté");
+        console.log("Gamepad disconnected");
       });
 
-      // Mobile Gyroscope
+      // Mobile gyroscope
       if(window.DeviceOrientationEvent) {
         window.addEventListener('deviceorientation', (event) => {
-          gyroBeta = event.beta; // [-180,180], front-back tilt
-          gyroGamma = event.gamma; // [-90,90], left-right tilt
+          gyroBeta = event.beta;
+          gyroGamma = event.gamma;
         }, true);
       }
     }
@@ -187,6 +229,7 @@
     }
 
     function onKeyDown(event) {
+      if(!gameStarted) return;
       switch(event.code) {
         case 'KeyZ':
         case 'ArrowUp':
@@ -204,6 +247,7 @@
     }
 
     function onKeyUp(event) {
+      if(!gameStarted) return;
       switch(event.code) {
         case 'KeyZ':
         case 'ArrowUp':
@@ -223,11 +267,15 @@
     function animate() {
       requestAnimationFrame(animate);
 
+      if(!gameStarted) {
+        renderer.render(scene, camera); // Show the empty scene behind start screen
+        return;
+      }
+
       const time = performance.now();
       const delta = (time - prevTime) / 1000;
 
       if(controls.isLocked === true) {
-
         // Player Movement
         velocity.x -= velocity.x * 10.0 * delta;
         velocity.z -= velocity.z * 10.0 * delta;
@@ -245,10 +293,9 @@
 
         controls.moveRight(- velocity.x * delta);
         controls.moveForward(- velocity.z * delta);
-
       }
 
-      // Monster follow player
+      // Monster follows player
       const playerPosition = player.position.clone();
       const monsterPosition = monster.position.clone();
 
@@ -260,25 +307,22 @@
         monster.position.add(toPlayerVec.multiplyScalar(monsterSpeed));
       }
 
-      // Monster simple oscillation for creepy effect
+      // Monster oscillation
       monster.position.y = 1 + 0.1 * Math.sin(time * 0.005);
 
       // Update flashlight target based on inputs
 
-      // Mobile gyro controls lamp torch direction
-      // Small mapping of beta/gamma to flashlight target angles on camera local z axis
+      // Mobile gyroscope control
       flashlight.target.position.x = THREE.MathUtils.clamp(gyroGamma / 30, -1, 1);
       flashlight.target.position.y = THREE.MathUtils.clamp(-gyroBeta / 30, -1, 1);
       flashlight.target.position.z = -1;
 
-      // Gamepad right stick controls flashlight direction
+      // Gamepad right stick control
       if(gamepadIndex !== null) {
         const gp = navigator.getGamepads()[gamepadIndex];
         if(gp) {
-          // axes 2 (X), 3 (Y) for right stick (common)
           let rx = gp.axes[2];
           let ry = gp.axes[3];
-          // Apply deadzone
           if(Math.abs(rx) < 0.1) rx = 0;
           if(Math.abs(ry) < 0.1) ry = 0;
           flashlight.target.position.x = THREE.MathUtils.clamp(rx, -1, 1);
@@ -287,15 +331,14 @@
         }
       }
 
-      // Clamp flashlight target more to center based on mouse movement (already included in PointerLockControls)
-
-      // Keep flashlight target normalized direction
       flashlight.target.position.normalize().multiplyScalar(1);
 
       prevTime = time;
 
       renderer.render(scene, camera);
     }
+
+    animate();
   </script>
 </body>
 </html>
